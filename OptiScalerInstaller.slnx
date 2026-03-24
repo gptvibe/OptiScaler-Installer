@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/OptiScalerInstaller.App/OptiScalerInstaller.App.csproj" />
+    <Project Path="src/OptiScalerInstaller.Core/OptiScalerInstaller.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/OptiScalerInstaller.Tests/OptiScalerInstaller.Tests.csproj" />
+  </Folder>
+</Solution>

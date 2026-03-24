@@ -1,0 +1,122 @@
+[
+  {
+    "steamAppId": 1091500,
+    "displayName": "Cyberpunk 2077",
+    "exeNames": [
+      "Cyberpunk2077.exe"
+    ],
+    "preferredProxy": "dxgi.dll",
+    "fallbackProxies": [
+      "winmm.dll",
+      "version.dll"
+    ],
+    "installPolicy": "Supported",
+    "requiresOptiPatcher": false,
+    "notesUrl": "https://github.com/optiscaler/OptiScaler/wiki/Compatibility-List"
+  },
+  {
+    "steamAppId": 292030,
+    "displayName": "The Witcher 3: Wild Hunt",
+    "exeNames": [
+      "witcher3.exe"
+    ],
+    "preferredProxy": "dxgi.dll",
+    "fallbackProxies": [
+      "winmm.dll",
+      "version.dll"
+    ],
+    "installPolicy": "Supported",
+    "requiresOptiPatcher": false,
+    "notesUrl": "https://github.com/optiscaler/OptiScaler/wiki/Compatibility-List"
+  },
+  {
+    "steamAppId": 990080,
+    "displayName": "Hogwarts Legacy",
+    "exeNames": [
+      "HogwartsLegacy.exe"
+    ],
+    "preferredProxy": "dxgi.dll",
+    "fallbackProxies": [
+      "winmm.dll",
+      "version.dll"
+    ],
+    "installPolicy": "Supported",
+    "requiresOptiPatcher": false,
+    "notesUrl": "https://github.com/optiscaler/OptiScaler/wiki/Compatibility-List"
+  },
+  {
+    "steamAppId": 1593500,
+    "displayName": "God of War",
+    "exeNames": [
+      "GoW.exe"
+    ],
+    "preferredProxy": "dxgi.dll",
+    "fallbackProxies": [
+      "winmm.dll",
+      "version.dll"
+    ],
+    "installPolicy": "Supported",
+    "requiresOptiPatcher": false,
+    "notesUrl": "https://github.com/optiscaler/OptiScaler/wiki/Compatibility-List"
+  },
+  {
+    "steamAppId": 1817070,
+    "displayName": "Marvel's Spider-Man Remastered",
+    "exeNames": [
+      "Spider-Man.exe"
+    ],
+    "preferredProxy": "dxgi.dll",
+    "fallbackProxies": [
+      "winmm.dll",
+      "version.dll"
+    ],
+    "installPolicy": "Supported",
+    "requiresOptiPatcher": false,
+    "notesUrl": "https://github.com/optiscaler/OptiScaler/wiki/Compatibility-List"
+  },
+  {
+    "steamAppId": 2420110,
+    "displayName": "Horizon Forbidden West Complete Edition",
+    "exeNames": [
+      "HorizonForbiddenWest.exe"
+    ],
+    "preferredProxy": "dxgi.dll",
+    "fallbackProxies": [
+      "winmm.dll",
+      "version.dll"
+    ],
+    "installPolicy": "Supported",
+    "requiresOptiPatcher": false,
+    "notesUrl": "https://github.com/optiscaler/OptiScaler/wiki/Compatibility-List"
+  },
+  {
+    "steamAppId": 2215430,
+    "displayName": "Ghost of Tsushima DIRECTOR'S CUT",
+    "exeNames": [
+      "GhostOfTsushima.exe"
+    ],
+    "preferredProxy": "dxgi.dll",
+    "fallbackProxies": [
+      "winmm.dll",
+      "version.dll"
+    ],
+    "installPolicy": "Supported",
+    "requiresOptiPatcher": false,
+    "notesUrl": "https://github.com/optiscaler/OptiScaler/wiki/Compatibility-List"
+  },
+  {
+    "steamAppId": 1174180,
+    "displayName": "Red Dead Redemption 2",
+    "exeNames": [
+      "RDR2.exe"
+    ],
+    "preferredProxy": "dxgi.dll",
+    "fallbackProxies": [
+      "winmm.dll",
+      "version.dll"
+    ],
+    "installPolicy": "Warn",
+    "requiresOptiPatcher": false,
+    "notesUrl": "https://github.com/optiscaler/OptiScaler/wiki/Compatibility-List"
+  }
+]
