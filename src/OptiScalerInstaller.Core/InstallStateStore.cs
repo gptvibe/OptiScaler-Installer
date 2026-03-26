@@ -18,18 +18,7 @@ public sealed class InstallStateStore
         try
         {
             appPaths.EnsureCreated();
-            if (!File.Exists(appPaths.InstallStateFilePath))
-            {
-                return [];
-            }
-
-            await using var stream = File.OpenRead(appPaths.InstallStateFilePath);
-            var records = await JsonSerializer.DeserializeAsync<List<InstallRecord>>(
-                stream,
-                JsonDefaults.Options,
-                cancellationToken);
-
-            return records ?? [];
+            return await LoadUnsafeAsync(cancellationToken);
         }
         finally
         {
@@ -96,6 +85,99 @@ public sealed class InstallStateStore
         }
     }
 
+    public async Task<IReadOnlyList<BackupSnapshotManifest>> LoadSnapshotsAsync(CancellationToken cancellationToken = default)
+    {
+        await gate.WaitAsync(cancellationToken);
+        try
+        {
+            appPaths.EnsureCreated();
+            return await LoadSnapshotsUnsafeAsync(cancellationToken);
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
+    public async Task<IReadOnlyList<BackupSnapshotManifest>> LoadRecoverableSnapshotsAsync(CancellationToken cancellationToken = default)
+    {
+        var snapshots = await LoadSnapshotsAsync(cancellationToken);
+        return snapshots
+            .Where(snapshot => snapshot.Status is
+                SnapshotTransactionStatus.Pending or
+                SnapshotTransactionStatus.RollbackFailed or
+                SnapshotTransactionStatus.RestoreFailed)
+            .OrderBy(snapshot => snapshot.CreatedAtUtc)
+            .ToList();
+    }
+
+    public async Task<BackupSnapshotManifest?> FindLatestSnapshotByGameKeyAsync(string gameKey, CancellationToken cancellationToken = default)
+    {
+        var snapshots = await LoadSnapshotsAsync(cancellationToken);
+        return snapshots
+            .Where(snapshot => string.Equals(snapshot.GameKey, gameKey, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(snapshot => snapshot.CreatedAtUtc)
+            .FirstOrDefault();
+    }
+
+    public async Task<BackupSnapshotManifest?> FindLatestSnapshotByInstallPathAsync(string installPath, CancellationToken cancellationToken = default)
+    {
+        var normalizedPath = Path.GetFullPath(installPath);
+        var snapshots = await LoadSnapshotsAsync(cancellationToken);
+        return snapshots
+            .Where(snapshot => string.Equals(
+                Path.GetFullPath(snapshot.InstallPath),
+                normalizedPath,
+                StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(snapshot => snapshot.CreatedAtUtc)
+            .FirstOrDefault();
+    }
+
+    public async Task UpsertSnapshotAsync(BackupSnapshotManifest snapshot, CancellationToken cancellationToken = default)
+    {
+        await gate.WaitAsync(cancellationToken);
+        try
+        {
+            appPaths.EnsureCreated();
+            var snapshots = (await LoadSnapshotsUnsafeAsync(cancellationToken)).ToList();
+            var existingIndex = snapshots.FindIndex(item =>
+                string.Equals(item.SnapshotId, snapshot.SnapshotId, StringComparison.OrdinalIgnoreCase));
+
+            if (existingIndex >= 0)
+            {
+                snapshots[existingIndex] = snapshot;
+            }
+            else
+            {
+                snapshots.Add(snapshot);
+            }
+
+            await SaveSnapshotsUnsafeAsync(snapshots, cancellationToken);
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
+    public async Task RemoveSnapshotAsync(string snapshotId, CancellationToken cancellationToken = default)
+    {
+        await gate.WaitAsync(cancellationToken);
+        try
+        {
+            appPaths.EnsureCreated();
+            var snapshots = (await LoadSnapshotsUnsafeAsync(cancellationToken))
+                .Where(snapshot => !string.Equals(snapshot.SnapshotId, snapshotId, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            await SaveSnapshotsUnsafeAsync(snapshots, cancellationToken);
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
     public static async Task<InstallRecord?> LoadMarkerAsync(string markerPath, CancellationToken cancellationToken = default)
     {
         if (!File.Exists(markerPath))
@@ -110,8 +192,13 @@ public sealed class InstallStateStore
     public static async Task SaveMarkerAsync(InstallRecord record, CancellationToken cancellationToken = default)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(record.MarkerPath)!);
-        await using var stream = File.Create(record.MarkerPath);
-        await JsonSerializer.SerializeAsync(stream, record, JsonDefaults.Options, cancellationToken);
+        var tempPath = record.MarkerPath + ".tmp";
+        await using (var stream = File.Create(tempPath))
+        {
+            await JsonSerializer.SerializeAsync(stream, record, JsonDefaults.Options, cancellationToken);
+        }
+
+        File.Move(tempPath, record.MarkerPath, overwrite: true);
     }
 
     private async Task<IReadOnlyList<InstallRecord>> LoadUnsafeAsync(CancellationToken cancellationToken)
@@ -121,18 +208,70 @@ public sealed class InstallStateStore
             return [];
         }
 
-        await using var stream = File.OpenRead(appPaths.InstallStateFilePath);
-        var records = await JsonSerializer.DeserializeAsync<List<InstallRecord>>(
-            stream,
-            JsonDefaults.Options,
-            cancellationToken);
+        try
+        {
+            await using var stream = File.OpenRead(appPaths.InstallStateFilePath);
+            var records = await JsonSerializer.DeserializeAsync<List<InstallRecord>>(
+                stream,
+                JsonDefaults.Options,
+                cancellationToken);
 
-        return records ?? [];
+            return records ?? [];
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            var corruptedPath = appPaths.InstallStateFilePath + ".corrupted";
+            File.Copy(appPaths.InstallStateFilePath, corruptedPath, overwrite: true);
+            File.Delete(appPaths.InstallStateFilePath);
+            return [];
+        }
     }
 
     private async Task SaveUnsafeAsync(IReadOnlyList<InstallRecord> records, CancellationToken cancellationToken)
     {
-        await using var stream = File.Create(appPaths.InstallStateFilePath);
-        await JsonSerializer.SerializeAsync(stream, records, JsonDefaults.Options, cancellationToken);
+        var tempPath = appPaths.InstallStateFilePath + ".tmp";
+        await using (var stream = File.Create(tempPath))
+        {
+            await JsonSerializer.SerializeAsync(stream, records, JsonDefaults.Options, cancellationToken);
+        }
+
+        File.Move(tempPath, appPaths.InstallStateFilePath, overwrite: true);
+    }
+
+    private async Task<IReadOnlyList<BackupSnapshotManifest>> LoadSnapshotsUnsafeAsync(CancellationToken cancellationToken)
+    {
+        if (!File.Exists(appPaths.SnapshotStateFilePath))
+        {
+            return [];
+        }
+
+        try
+        {
+            await using var stream = File.OpenRead(appPaths.SnapshotStateFilePath);
+            var snapshots = await JsonSerializer.DeserializeAsync<List<BackupSnapshotManifest>>(
+                stream,
+                JsonDefaults.Options,
+                cancellationToken);
+
+            return snapshots ?? [];
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            var corruptedPath = appPaths.SnapshotStateFilePath + ".corrupted";
+            File.Copy(appPaths.SnapshotStateFilePath, corruptedPath, overwrite: true);
+            File.Delete(appPaths.SnapshotStateFilePath);
+            return [];
+        }
+    }
+
+    private async Task SaveSnapshotsUnsafeAsync(IReadOnlyList<BackupSnapshotManifest> snapshots, CancellationToken cancellationToken)
+    {
+        var tempPath = appPaths.SnapshotStateFilePath + ".tmp";
+        await using (var stream = File.Create(tempPath))
+        {
+            await JsonSerializer.SerializeAsync(stream, snapshots, JsonDefaults.Options, cancellationToken);
+        }
+
+        File.Move(tempPath, appPaths.SnapshotStateFilePath, overwrite: true);
     }
 }

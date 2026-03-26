@@ -13,27 +13,32 @@ public sealed class MainViewModel : ObservableObject
     private readonly GpuDetector gpuDetector;
     private readonly InstallationService installationService;
     private readonly IUserInteractionService userInteractionService;
+    private readonly RunLogger? runLogger;
 
     private string gpuVendorText = "Detecting GPU...";
     private string statusText = "Ready";
     private bool isBusy;
+    private CancellationTokenSource? operationCts;
 
     public MainViewModel(
         GameScannerService gameScannerService,
         GpuDetector gpuDetector,
         InstallationService installationService,
-        IUserInteractionService userInteractionService)
+        IUserInteractionService userInteractionService,
+        RunLogger? runLogger = null)
     {
         this.gameScannerService = gameScannerService;
         this.gpuDetector = gpuDetector;
         this.installationService = installationService;
         this.userInteractionService = userInteractionService;
+        this.runLogger = runLogger;
 
         RefreshCommand = new AsyncRelayCommand(RefreshAsync, () => !IsBusy);
         BrowseFolderCommand = new AsyncRelayCommand(BrowseFolderAsync, () => !IsBusy);
         InstallSelectedCommand = new AsyncRelayCommand(InstallSelectedAsync, CanInstallSelected);
         InstallAllCommand = new AsyncRelayCommand(InstallAllAsync, CanInstallAny);
         UndoCommand = new AsyncRelayCommand<InstallRecordItemViewModel>(UndoAsync, _ => !IsBusy);
+        CancelCommand = new RelayCommand(CancelCurrentOperation, () => IsBusy);
     }
 
     public ObservableCollection<DetectedGameItemViewModel> Games { get; } = [];
@@ -51,6 +56,8 @@ public sealed class MainViewModel : ObservableObject
     public AsyncRelayCommand InstallAllCommand { get; }
 
     public AsyncRelayCommand<InstallRecordItemViewModel> UndoCommand { get; }
+
+    public RelayCommand CancelCommand { get; }
 
     public string GpuVendorText
     {
@@ -81,7 +88,56 @@ public sealed class MainViewModel : ObservableObject
 
     public bool HasInstalledGames => InstalledGames.Any();
 
-    public async Task InitializeAsync() => await RefreshAsync();
+    public async Task InitializeAsync()
+    {
+        await RecoverPendingTransactionsAsync();
+        await RefreshAsync();
+    }
+
+    private async Task RecoverPendingTransactionsAsync()
+    {
+        try
+        {
+            var recoverableSnapshots = await installationService.LoadRecoverableSnapshotsAsync();
+            if (recoverableSnapshots.Count == 0)
+            {
+                return;
+            }
+
+            var preview = string.Join(
+                Environment.NewLine,
+                recoverableSnapshots.Take(4).Select(snapshot =>
+                    $"- {snapshot.DisplayName} ({snapshot.Status})"));
+            var extra = recoverableSnapshots.Count > 4
+                ? $"{Environment.NewLine}...and {recoverableSnapshots.Count - 4} more."
+                : string.Empty;
+
+            var shouldRecover = userInteractionService.Confirm(
+                "Recovery Available",
+                "The installer found unfinished backup transactions. Recover now?"
+                + Environment.NewLine
+                + Environment.NewLine
+                + preview
+                + extra);
+
+            if (!shouldRecover)
+            {
+                AddLog(LogSeverity.Warning, "Startup recovery skipped by user.");
+                return;
+            }
+
+            var progress = CreateProgress();
+            foreach (var snapshot in recoverableSnapshots)
+            {
+                var outcome = await installationService.RestoreBackupAsync(snapshot.GameKey, progress);
+                AddLog(outcome.Success ? LogSeverity.Success : LogSeverity.Error, outcome.Message);
+            }
+        }
+        catch (Exception exception)
+        {
+            AddLog(LogSeverity.Error, $"Recovery check failed: {exception.Message}");
+        }
+    }
 
     private async Task RefreshAsync()
     {
@@ -91,6 +147,8 @@ public sealed class MainViewModel : ObservableObject
         }
 
         IsBusy = true;
+        operationCts = new CancellationTokenSource();
+        var cancellationToken = operationCts.Token;
         StatusText = "Scanning Steam libraries...";
         AddLog(LogSeverity.Info, "Starting auto-detection.");
 
@@ -109,7 +167,7 @@ public sealed class MainViewModel : ObservableObject
                 existing.PropertyChanged -= OnGamePropertyChanged;
             }
 
-            var detectedGames = await gameScannerService.ScanSteamGamesAsync();
+            var detectedGames = await gameScannerService.ScanSteamGamesAsync(cancellationToken);
             Games.Clear();
 
             foreach (var detectedGame in detectedGames)
@@ -128,6 +186,11 @@ public sealed class MainViewModel : ObservableObject
                 detectedGames.Count == 0 ? LogSeverity.Warning : LogSeverity.Success,
                 StatusText);
         }
+        catch (OperationCanceledException)
+        {
+            StatusText = "Scan cancelled.";
+            AddLog(LogSeverity.Warning, "Scan cancelled.");
+        }
         catch (Exception exception)
         {
             StatusText = "Scan failed.";
@@ -135,6 +198,8 @@ public sealed class MainViewModel : ObservableObject
         }
         finally
         {
+            operationCts.Dispose();
+            operationCts = null;
             IsBusy = false;
             OnPropertyChanged(nameof(HasInstalledGames));
         }
@@ -231,6 +296,8 @@ public sealed class MainViewModel : ObservableObject
         }
 
         IsBusy = true;
+        operationCts = new CancellationTokenSource();
+        var cancellationToken = operationCts.Token;
         StatusText = "Installing selected games...";
         var progress = CreateProgress();
         var gpuVendor = gpuDetector.DetectGpuVendor();
@@ -239,6 +306,8 @@ public sealed class MainViewModel : ObservableObject
         {
             foreach (var game in gamesToInstall)
             {
+                cancellationToken.ThrowIfCancellationRequested();
+
                 var outcome = await installationService.InstallAsync(
                     game.Model,
                     new InstallationRequest
@@ -246,7 +315,8 @@ public sealed class MainViewModel : ObservableObject
                         GpuVendor = gpuVendor,
                         ForceUnsupportedInstall = game.ForceUnsupportedInstall,
                     },
-                    progress);
+                    progress,
+                    cancellationToken);
 
                 AddLog(outcome.Success ? LogSeverity.Success : LogSeverity.Error, outcome.Message);
 
@@ -258,8 +328,15 @@ public sealed class MainViewModel : ObservableObject
 
             StatusText = "Install run complete.";
         }
+        catch (OperationCanceledException)
+        {
+            StatusText = "Install cancelled.";
+            AddLog(LogSeverity.Warning, "Install cancelled.");
+        }
         finally
         {
+            operationCts.Dispose();
+            operationCts = null;
             IsBusy = false;
             OnPropertyChanged(nameof(HasInstalledGames));
         }
@@ -280,12 +357,14 @@ public sealed class MainViewModel : ObservableObject
         }
 
         IsBusy = true;
+        operationCts = new CancellationTokenSource();
+        var cancellationToken = operationCts.Token;
         StatusText = $"Undoing {recordItem.DisplayName}...";
         var progress = CreateProgress();
 
         try
         {
-            var outcome = await installationService.UndoAsync(recordItem.Record, progress);
+            var outcome = await installationService.UndoAsync(recordItem.Record, progress, cancellationToken);
             AddLog(outcome.Success ? LogSeverity.Success : LogSeverity.Error, outcome.Message);
 
             if (outcome.Success)
@@ -294,12 +373,20 @@ public sealed class MainViewModel : ObservableObject
                 OnPropertyChanged(nameof(HasInstalledGames));
             }
         }
+        catch (OperationCanceledException)
+        {
+            AddLog(LogSeverity.Warning, "Undo cancelled.");
+        }
         finally
         {
+            operationCts.Dispose();
+            operationCts = null;
             StatusText = "Ready";
             IsBusy = false;
         }
     }
+
+    private void CancelCurrentOperation() => operationCts?.Cancel();
 
     private Progress<InstallerLogEntry> CreateProgress()
         => new(entry => AddLog(entry.Severity, entry.Message));
@@ -358,7 +445,9 @@ public sealed class MainViewModel : ObservableObject
 
     private void AddLog(LogSeverity severity, string message)
     {
-        Logs.Add(LogEntryViewModel.FromCore(InstallerLogEntry.Create(severity, message)));
+        var entry = InstallerLogEntry.Create(severity, message);
+        Logs.Add(LogEntryViewModel.FromCore(entry));
+        runLogger?.Log(entry);
         while (Logs.Count > 400)
         {
             Logs.RemoveAt(0);
@@ -378,6 +467,7 @@ public sealed class MainViewModel : ObservableObject
         InstallSelectedCommand.NotifyCanExecuteChanged();
         InstallAllCommand.NotifyCanExecuteChanged();
         UndoCommand.NotifyCanExecuteChanged();
+        CancelCommand.NotifyCanExecuteChanged();
         OnPropertyChanged(nameof(HasNoGames));
     }
 

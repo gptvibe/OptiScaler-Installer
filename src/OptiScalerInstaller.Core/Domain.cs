@@ -39,6 +39,30 @@ public enum LogSeverity
     Error,
 }
 
+public enum FailureKind
+{
+    None,
+    ScanFailed,
+    DownloadFailed,
+    NetworkUnavailable,
+    InstallFailed,
+    UndoFailed,
+    PreflightFailed,
+    AccessDenied,
+}
+
+public enum SnapshotTransactionStatus
+{
+    Pending,
+    Applied,
+    RollingBack,
+    RolledBack,
+    RollbackFailed,
+    Restoring,
+    Restored,
+    RestoreFailed,
+}
+
 public sealed class SupportedGameEntry
 {
     public int? SteamAppId { get; init; }
@@ -174,6 +198,59 @@ public sealed class FileBackup
     public required string BackupPath { get; init; }
 }
 
+public sealed class SnapshotFileRecord
+{
+    public required string RelativePath { get; init; }
+
+    public required string TransactionPath { get; init; }
+
+    public string? BackupPath { get; init; }
+
+    public bool ReplacedExistingFile { get; init; }
+
+    public long InstalledFileSizeBytes { get; init; }
+
+    public required string InstalledFileSha256 { get; init; }
+
+    public long? OriginalFileSizeBytes { get; init; }
+
+    public string? OriginalFileSha256 { get; init; }
+
+    public DateTimeOffset InstalledAtUtc { get; init; }
+}
+
+public sealed class BackupSnapshotManifest
+{
+    public required string SnapshotId { get; init; }
+
+    public required string GameKey { get; init; }
+
+    public required string DisplayName { get; init; }
+
+    public required string InstallPath { get; init; }
+
+    public required string MarkerPath { get; init; }
+
+    public required string ReleaseTag { get; set; }
+
+    public required string ProxyName { get; set; }
+
+    public required string TransactionRootPath { get; init; }
+
+    public DateTimeOffset CreatedAtUtc { get; init; }
+
+    public DateTimeOffset LastUpdatedAtUtc { get; set; }
+
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public SnapshotTransactionStatus Status { get; set; } = SnapshotTransactionStatus.Pending;
+
+    public string? LastError { get; set; }
+
+    public List<string> CreatedDirectories { get; init; } = [];
+
+    public List<SnapshotFileRecord> Files { get; init; } = [];
+}
+
 public sealed class InstallRecord
 {
     public required string GameKey { get; init; }
@@ -218,18 +295,22 @@ public sealed class InstallOutcome
 
     public InstallRecord? Record { get; init; }
 
+    public FailureKind FailureKind { get; init; }
+
     public static InstallOutcome Succeeded(string message, InstallRecord? record = null)
         => new()
         {
             Success = true,
             Message = message,
             Record = record,
+            FailureKind = FailureKind.None,
         };
 
-    public static InstallOutcome Failed(string message)
+    public static InstallOutcome Failed(string message, FailureKind kind = FailureKind.InstallFailed)
         => new()
         {
             Success = false,
             Message = message,
+            FailureKind = kind,
         };
 }
