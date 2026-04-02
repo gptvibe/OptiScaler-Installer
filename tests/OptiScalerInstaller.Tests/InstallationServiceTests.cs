@@ -90,6 +90,39 @@ public sealed class InstallationServiceTests
     }
 
     [Fact]
+    public async Task InstallAsync_UsesPreparedReleaseHandleAcrossMultipleGames()
+    {
+        using var temp = new TemporaryDirectory();
+        var appPaths = new AppPaths(Path.Combine(temp.Path, "appdata"));
+        var payloadPath = CreatePayload(temp.Path);
+        var provider = new TestReleaseAssetProvider(payloadPath, Path.Combine(payloadPath, "OptiPatcher.asi"));
+        var service = new InstallationService(appPaths, provider, new InstallStateStore(appPaths));
+        var preparedRelease = CreatePreparedRelease(payloadPath);
+
+        var firstGamePath = Path.Combine(temp.Path, "PreparedOne");
+        var secondGamePath = Path.Combine(temp.Path, "PreparedTwo");
+        Directory.CreateDirectory(firstGamePath);
+        Directory.CreateDirectory(secondGamePath);
+
+        var firstOutcome = await service.InstallAsync(
+            CreateGame("Prepared One", firstGamePath, InstallPolicy.Supported),
+            new InstallationRequest { GpuVendor = GpuVendor.Nvidia },
+            preparedRelease,
+            new Progress<InstallerLogEntry>());
+        var secondOutcome = await service.InstallAsync(
+            CreateGame("Prepared Two", secondGamePath, InstallPolicy.Supported),
+            new InstallationRequest { GpuVendor = GpuVendor.Nvidia },
+            preparedRelease,
+            new Progress<InstallerLogEntry>());
+
+        Assert.True(firstOutcome.Success);
+        Assert.True(secondOutcome.Success);
+        Assert.Equal(0, provider.PrepareCallCount);
+        Assert.True(File.Exists(Path.Combine(firstGamePath, "dxgi.dll")));
+        Assert.True(File.Exists(Path.Combine(secondGamePath, "dxgi.dll")));
+    }
+
+    [Fact]
     public async Task InstallStateStore_UpsertAndRemove_RoundTripsRecords()
     {
         using var temp = new TemporaryDirectory();
@@ -358,6 +391,19 @@ public sealed class InstallationServiceTests
         return payloadPath;
     }
 
+    private static PreparedReleaseAsset CreatePreparedRelease(string payloadPath)
+        => new()
+        {
+            Release = new ReleaseAsset
+            {
+                TagName = "v-test",
+                AssetName = "OptiScaler_test.7z",
+                DownloadUrl = "https://example.test/OptiScaler_test.7z",
+                PublishedAtUtc = DateTimeOffset.UtcNow,
+            },
+            ExtractedPath = payloadPath,
+        };
+
     private static string ComputeSha256(string filePath)
     {
         using var hash = SHA256.Create();
@@ -376,21 +422,16 @@ public sealed class InstallationServiceTests
             this.pluginPath = pluginPath;
         }
 
+        public int PrepareCallCount { get; private set; }
+
         public Task<string> GetOptiPatcherPluginAsync(IProgress<InstallerLogEntry>? progress, CancellationToken cancellationToken = default)
             => Task.FromResult(pluginPath);
 
         public Task<PreparedReleaseAsset> PrepareLatestStableReleaseAsync(IProgress<InstallerLogEntry>? progress, CancellationToken cancellationToken = default)
-            => Task.FromResult(new PreparedReleaseAsset
-            {
-                Release = new ReleaseAsset
-                {
-                    TagName = "v-test",
-                    AssetName = "OptiScaler_test.7z",
-                    DownloadUrl = "https://example.test/OptiScaler_test.7z",
-                    PublishedAtUtc = DateTimeOffset.UtcNow,
-                },
-                ExtractedPath = payloadPath,
-            });
+        {
+            PrepareCallCount++;
+            return Task.FromResult(CreatePreparedRelease(payloadPath));
+        }
     }
 
     private sealed class ThrowingPluginReleaseAssetProvider : IReleaseAssetProvider
@@ -406,16 +447,6 @@ public sealed class InstallationServiceTests
             => throw new InvalidOperationException("Simulated plugin download failure");
 
         public Task<PreparedReleaseAsset> PrepareLatestStableReleaseAsync(IProgress<InstallerLogEntry>? progress, CancellationToken cancellationToken = default)
-            => Task.FromResult(new PreparedReleaseAsset
-            {
-                Release = new ReleaseAsset
-                {
-                    TagName = "v-test",
-                    AssetName = "OptiScaler_test.7z",
-                    DownloadUrl = "https://example.test/OptiScaler_test.7z",
-                    PublishedAtUtc = DateTimeOffset.UtcNow,
-                },
-                ExtractedPath = payloadPath,
-            });
+            => Task.FromResult(CreatePreparedRelease(payloadPath));
     }
 }

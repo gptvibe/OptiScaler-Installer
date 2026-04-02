@@ -183,6 +183,31 @@ public sealed class ResilienceTests
             () => provider.PrepareLatestStableReleaseAsync(null));
     }
 
+    [Fact]
+    public async Task PrepareLatestStable_CachesMetadataWithinSession()
+    {
+        using var temp = new TemporaryDirectory();
+        var appPaths = new AppPaths(Path.Combine(temp.Path, "appdata"));
+        appPaths.EnsureCreated();
+
+        const string cachedTag = "v2.0.0-session";
+        var cacheDir = Path.Combine(appPaths.CachePath, cachedTag);
+        var extractedDir = Path.Combine(cacheDir, "extracted");
+        Directory.CreateDirectory(extractedDir);
+        await File.WriteAllTextAsync(Path.Combine(extractedDir, ".prepared"), cachedTag);
+        await File.WriteAllTextAsync(Path.Combine(extractedDir, "OptiScaler.dll"), "dll-bytes");
+
+        var handler = new CountingReleaseMetadataMessageHandler(cachedTag);
+        var provider = new GitHubReleaseAssetProvider(appPaths, new HttpClient(handler));
+
+        var first = await provider.PrepareLatestStableReleaseAsync(null);
+        var second = await provider.PrepareLatestStableReleaseAsync(null);
+
+        Assert.Equal(cachedTag, first.Release.TagName);
+        Assert.Equal(cachedTag, second.Release.TagName);
+        Assert.Equal(1, handler.LatestReleaseRequestCount);
+    }
+
     // ── Preflight failures ───────────────────────────────────────────────────
 
     [Fact]
@@ -328,6 +353,47 @@ public sealed class ResilienceTests
             HttpRequestMessage request,
             CancellationToken cancellationToken)
             => throw new HttpRequestException("Simulated network failure");
+    }
+
+    private sealed class CountingReleaseMetadataMessageHandler : HttpMessageHandler
+    {
+        private readonly string releaseTag;
+
+        public CountingReleaseMetadataMessageHandler(string releaseTag)
+        {
+            this.releaseTag = releaseTag;
+        }
+
+        public int LatestReleaseRequestCount { get; private set; }
+
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken)
+        {
+            if (request.RequestUri?.AbsoluteUri.Contains("/releases/latest", StringComparison.OrdinalIgnoreCase) == true)
+            {
+                LatestReleaseRequestCount++;
+                var body = $$"""
+                {
+                  "tag_name": "{{releaseTag}}",
+                  "published_at": "2026-04-02T00:00:00Z",
+                  "assets": [
+                    {
+                      "name": "OptiScaler_test.7z",
+                      "browser_download_url": "https://example.test/OptiScaler_test.7z"
+                    }
+                  ]
+                }
+                """;
+
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(body),
+                });
+            }
+
+            throw new HttpRequestException($"Unexpected request: {request.RequestUri}");
+        }
     }
 
     private sealed class TestReleaseProvider : IReleaseAssetProvider

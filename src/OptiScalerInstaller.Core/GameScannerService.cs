@@ -5,6 +5,36 @@ namespace OptiScalerInstaller.Core;
 
 public sealed class GameScannerService
 {
+    private const int MaxExecutableSearchDepth = 4;
+    private const int HeuristicDirectorySearchDepth = 4;
+    private static readonly string[] PreferredExecutableSubdirectories =
+    [
+        string.Empty,
+        "Binaries",
+        Path.Combine("Binaries", "Win64"),
+        Path.Combine("Binaries", "WinGDK"),
+        Path.Combine("Binaries", "Retail"),
+        "bin",
+        Path.Combine("bin", "x64"),
+        Path.Combine("bin", "x86"),
+        "Bin",
+        Path.Combine("Bin", "x64"),
+        Path.Combine("Bin", "x86"),
+        "x64",
+        "x86",
+    ];
+
+    private static readonly HashSet<string> HeuristicDirectoryNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "binaries",
+        "bin",
+        "win64",
+        "wingdk",
+        "retail",
+        "x64",
+        "x86",
+    };
+
     private readonly SupportedGameCatalogService catalogService;
     private readonly SteamDiscoveryService steamDiscoveryService;
 
@@ -111,27 +141,30 @@ public sealed class GameScannerService
 
     public static string? TryFindExecutable(string installPath, IEnumerable<string> exeNames)
     {
-        foreach (var exeName in exeNames)
+        if (!Directory.Exists(installPath))
         {
-            try
-            {
-                var match = Directory.EnumerateFiles(installPath, exeName, SearchOption.AllDirectories).FirstOrDefault();
-                if (match is not null)
-                {
-                    return match;
-                }
-            }
-            catch (UnauthorizedAccessException)
-            {
-                // Skip paths we cannot read.
-            }
-            catch (DirectoryNotFoundException)
-            {
-                return null;
-            }
+            return null;
         }
 
-        return null;
+        var normalizedExeNames = exeNames
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Select(name => name.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (normalizedExeNames.Count == 0)
+        {
+            return null;
+        }
+
+        var heuristicMatch = TryFindExecutableByHeuristics(installPath, normalizedExeNames);
+        if (heuristicMatch is not null)
+        {
+            return heuristicMatch;
+        }
+
+        var exeNameSet = normalizedExeNames.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return EnumerateExecutables(installPath)
+            .FirstOrDefault(path => exeNameSet.Contains(Path.GetFileName(path)));
     }
 
     private static IEnumerable<string> EnumerateExecutables(string installPath)
@@ -143,9 +176,7 @@ public sealed class GameScannerService
 
         try
         {
-            return Directory.EnumerateFiles(installPath, "*.exe", SearchOption.AllDirectories)
-                .Where(path => GetRelativeDepth(installPath, path) <= 4)
-                .ToList();
+            return EnumerateFilesBreadthFirst(installPath, "*.exe", MaxExecutableSearchDepth).ToList();
         }
         catch (UnauthorizedAccessException)
         {
@@ -153,10 +184,128 @@ public sealed class GameScannerService
         }
     }
 
-    private static int GetRelativeDepth(string rootPath, string filePath)
+    private static string? TryFindExecutableByHeuristics(string installPath, IReadOnlyList<string> exeNames)
     {
-        var relativePath = Path.GetRelativePath(rootPath, filePath);
-        return relativePath.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).Length - 1;
+        var candidatePaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var exeName in exeNames)
+        {
+            foreach (var relativeDirectory in PreferredExecutableSubdirectories)
+            {
+                var candidatePath = string.IsNullOrWhiteSpace(relativeDirectory)
+                    ? Path.Combine(installPath, exeName)
+                    : Path.Combine(installPath, relativeDirectory, exeName);
+                candidatePaths.Add(candidatePath);
+            }
+        }
+
+        foreach (var directoryPath in EnumerateDirectoriesBreadthFirst(installPath, HeuristicDirectorySearchDepth))
+        {
+            if (!HeuristicDirectoryNames.Contains(Path.GetFileName(directoryPath)))
+            {
+                continue;
+            }
+
+            foreach (var exeName in exeNames)
+            {
+                candidatePaths.Add(Path.Combine(directoryPath, exeName));
+            }
+        }
+
+        return candidatePaths.FirstOrDefault(File.Exists);
+    }
+
+    private static IEnumerable<string> EnumerateFilesBreadthFirst(string rootPath, string searchPattern, int maxDepth)
+    {
+        var pending = new Queue<(string DirectoryPath, int Depth)>();
+        pending.Enqueue((rootPath, 0));
+
+        while (pending.Count > 0)
+        {
+            var (directoryPath, depth) = pending.Dequeue();
+            IEnumerable<string> files;
+
+            try
+            {
+                files = Directory.EnumerateFiles(directoryPath, searchPattern, SearchOption.TopDirectoryOnly);
+            }
+            catch (UnauthorizedAccessException)
+            {
+                continue;
+            }
+            catch (DirectoryNotFoundException)
+            {
+                continue;
+            }
+
+            foreach (var filePath in files)
+            {
+                yield return filePath;
+            }
+
+            if (depth >= maxDepth)
+            {
+                continue;
+            }
+
+            IEnumerable<string> childDirectories;
+            try
+            {
+                childDirectories = Directory.EnumerateDirectories(directoryPath, "*", SearchOption.TopDirectoryOnly);
+            }
+            catch (UnauthorizedAccessException)
+            {
+                continue;
+            }
+            catch (DirectoryNotFoundException)
+            {
+                continue;
+            }
+
+            foreach (var childDirectory in childDirectories)
+            {
+                pending.Enqueue((childDirectory, depth + 1));
+            }
+        }
+    }
+
+    private static IEnumerable<string> EnumerateDirectoriesBreadthFirst(string rootPath, int maxDepth)
+    {
+        var pending = new Queue<(string DirectoryPath, int Depth)>();
+        pending.Enqueue((rootPath, 0));
+
+        while (pending.Count > 0)
+        {
+            var (directoryPath, depth) = pending.Dequeue();
+            if (depth > 0)
+            {
+                yield return directoryPath;
+            }
+
+            if (depth >= maxDepth)
+            {
+                continue;
+            }
+
+            IEnumerable<string> childDirectories;
+            try
+            {
+                childDirectories = Directory.EnumerateDirectories(directoryPath, "*", SearchOption.TopDirectoryOnly);
+            }
+            catch (UnauthorizedAccessException)
+            {
+                continue;
+            }
+            catch (DirectoryNotFoundException)
+            {
+                continue;
+            }
+
+            foreach (var childDirectory in childDirectories)
+            {
+                pending.Enqueue((childDirectory, depth + 1));
+            }
+        }
     }
 
     private static DetectedGame CreateDetectedGame(

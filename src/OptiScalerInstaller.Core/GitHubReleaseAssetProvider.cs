@@ -1,5 +1,6 @@
 using System.Net.Http.Headers;
 using System.Text.Json;
+using System.Threading;
 using SharpCompress.Archives;
 using SharpCompress.Common;
 using SharpCompress.Readers;
@@ -26,6 +27,8 @@ public sealed class GitHubReleaseAssetProvider : IReleaseAssetProvider
 
     private readonly HttpClient httpClient;
     private readonly AppPaths appPaths;
+    private readonly SemaphoreSlim latestReleaseMetadataLock = new(1, 1);
+    private ReleaseAsset? latestReleaseMetadata;
 
     public GitHubReleaseAssetProvider(AppPaths appPaths, HttpClient? httpClient = null)
     {
@@ -39,13 +42,10 @@ public sealed class GitHubReleaseAssetProvider : IReleaseAssetProvider
     {
         appPaths.EnsureCreated();
 
-        ReleaseAsset? release = null;
+        ReleaseAsset release;
         try
         {
-            release = await RetryWithBackoffAsync(
-                ct => GetLatestReleaseAsync(ct),
-                MaxMetadataRetries,
-                cancellationToken);
+            release = await GetLatestReleaseMetadataAsync(progress, cancellationToken);
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException && !cancellationToken.IsCancellationRequested)
         {
@@ -118,6 +118,38 @@ public sealed class GitHubReleaseAssetProvider : IReleaseAssetProvider
         progress?.Report(InstallerLogEntry.Create(LogSeverity.Info, "Downloading OptiPatcher plugin..."));
         await DownloadToFileAsync(OptiPatcherUrl, destinationPath, cancellationToken);
         return destinationPath;
+    }
+
+    private async Task<ReleaseAsset> GetLatestReleaseMetadataAsync(
+        IProgress<InstallerLogEntry>? progress,
+        CancellationToken cancellationToken)
+    {
+        if (latestReleaseMetadata is not null)
+        {
+            progress?.Report(InstallerLogEntry.Create(LogSeverity.Info, $"Using cached release metadata for {latestReleaseMetadata.TagName}."));
+            return latestReleaseMetadata;
+        }
+
+        await latestReleaseMetadataLock.WaitAsync(cancellationToken);
+        try
+        {
+            if (latestReleaseMetadata is not null)
+            {
+                progress?.Report(InstallerLogEntry.Create(LogSeverity.Info, $"Using cached release metadata for {latestReleaseMetadata.TagName}."));
+                return latestReleaseMetadata;
+            }
+
+            latestReleaseMetadata = await RetryWithBackoffAsync(
+                ct => GetLatestReleaseAsync(ct),
+                MaxMetadataRetries,
+                cancellationToken);
+
+            return latestReleaseMetadata;
+        }
+        finally
+        {
+            latestReleaseMetadataLock.Release();
+        }
     }
 
     private async Task<ReleaseAsset> GetLatestReleaseAsync(CancellationToken cancellationToken)

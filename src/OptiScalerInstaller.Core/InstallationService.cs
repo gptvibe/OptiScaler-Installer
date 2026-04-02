@@ -53,12 +53,26 @@ public sealed class InstallationService
     public async Task<IReadOnlyList<BackupSnapshotManifest>> LoadRecoverableSnapshotsAsync(CancellationToken cancellationToken = default)
         => await installStateStore.LoadRecoverableSnapshotsAsync(cancellationToken);
 
-    public async Task<InstallOutcome> InstallAsync(
+    public Task<PreparedReleaseAsset> PrepareLatestStableReleaseAsync(
+        IProgress<InstallerLogEntry>? progress = null,
+        CancellationToken cancellationToken = default)
+        => releaseAssetProvider.PrepareLatestStableReleaseAsync(progress, cancellationToken);
+
+    public Task<InstallOutcome> InstallAsync(
         DetectedGame game,
         InstallationRequest request,
         IProgress<InstallerLogEntry>? progress = null,
         CancellationToken cancellationToken = default)
+        => InstallAsync(game, request, preparedRelease: null, progress, cancellationToken);
+
+    public async Task<InstallOutcome> InstallAsync(
+        DetectedGame game,
+        InstallationRequest request,
+        PreparedReleaseAsset? preparedRelease,
+        IProgress<InstallerLogEntry>? progress = null,
+        CancellationToken cancellationToken = default)
     {
+        var fileFingerprintCache = new FileFingerprintCache();
         BackupSnapshotManifest? snapshot = null;
         try
         {
@@ -98,8 +112,9 @@ public sealed class InstallationService
                 }
             }
 
-            var preparedRelease = await releaseAssetProvider.PrepareLatestStableReleaseAsync(progress, cancellationToken);
-            var releaseRoot = preparedRelease.ExtractedPath;
+            var resolvedPreparedRelease = preparedRelease
+                ?? await releaseAssetProvider.PrepareLatestStableReleaseAsync(progress, cancellationToken);
+            var releaseRoot = resolvedPreparedRelease.ExtractedPath;
             var optiScalerSourcePath = Path.Combine(releaseRoot, "OptiScaler.dll");
             if (!File.Exists(optiScalerSourcePath))
             {
@@ -108,7 +123,7 @@ public sealed class InstallationService
                     FailureKind.InstallFailed);
             }
 
-            var proxyName = SelectProxyName(game, optiScalerSourcePath);
+            var proxyName = SelectProxyName(game, optiScalerSourcePath, fileFingerprintCache);
             if (proxyName is null)
             {
                 return InstallOutcome.Failed(
@@ -129,7 +144,7 @@ public sealed class InstallationService
                 DisplayName = game.DisplayName,
                 InstallPath = game.InstallPath,
                 MarkerPath = markerPath,
-                ReleaseTag = preparedRelease.Release.TagName,
+                ReleaseTag = resolvedPreparedRelease.Release.TagName,
                 ProxyName = proxyName,
                 TransactionRootPath = transactionRoot,
                 CreatedAtUtc = DateTimeOffset.UtcNow,
@@ -149,7 +164,7 @@ public sealed class InstallationService
                 }
 
                 var destinationPath = Path.Combine(game.InstallPath, rootFile);
-                await ApplyManagedFileAsync(sourcePath, destinationPath, snapshot, cancellationToken);
+                await ApplyManagedFileAsync(sourcePath, destinationPath, snapshot, fileFingerprintCache, cancellationToken);
             }
 
             foreach (var rootDirectory in RootDirectories)
@@ -164,11 +179,12 @@ public sealed class InstallationService
                     sourceDirectoryPath,
                     Path.Combine(game.InstallPath, rootDirectory),
                     snapshot,
+                    fileFingerprintCache,
                     cancellationToken);
             }
 
             var proxyDestinationPath = Path.Combine(game.InstallPath, proxyName);
-            await ApplyManagedFileAsync(optiScalerSourcePath, proxyDestinationPath, snapshot, cancellationToken);
+            await ApplyManagedFileAsync(optiScalerSourcePath, proxyDestinationPath, snapshot, fileFingerprintCache, cancellationToken);
 
             var usedOptiPatcher = false;
             if (ShouldInstallOptiPatcher(game, request))
@@ -178,11 +194,11 @@ public sealed class InstallationService
                 await EnsureTrackedDirectoryExistsAsync(pluginsDirectoryPath, snapshot, cancellationToken);
 
                 var pluginDestinationPath = Path.Combine(pluginsDirectoryPath, "OptiPatcher.asi");
-                await ApplyManagedFileAsync(pluginSourcePath, pluginDestinationPath, snapshot, cancellationToken);
+                await ApplyManagedFileAsync(pluginSourcePath, pluginDestinationPath, snapshot, fileFingerprintCache, cancellationToken);
                 var iniPath = Path.Combine(game.InstallPath, "OptiScaler.ini");
                 if (EnableAsiPlugins(iniPath))
                 {
-                    await RefreshSnapshotFileRecordAsync(iniPath, snapshot, cancellationToken);
+                    await RefreshSnapshotFileRecordAsync(iniPath, snapshot, fileFingerprintCache, cancellationToken);
                 }
 
                 usedOptiPatcher = true;
@@ -205,7 +221,7 @@ public sealed class InstallationService
                 DisplayName = game.DisplayName,
                 InstallPath = game.InstallPath,
                 MarkerPath = markerPath,
-                ReleaseTag = preparedRelease.Release.TagName,
+                ReleaseTag = resolvedPreparedRelease.Release.TagName,
                 ProxyName = proxyName,
                 InstalledAtUtc = DateTimeOffset.UtcNow,
                 ManualOverride = request.ForceUnsupportedInstall || game.IsManualOverride,
@@ -549,7 +565,7 @@ public sealed class InstallationService
         await installStateStore.RemoveSnapshotAsync(snapshot.SnapshotId, CancellationToken.None);
     }
 
-    private string? SelectProxyName(DetectedGame game, string sourceOptiScalerPath)
+    private string? SelectProxyName(DetectedGame game, string sourceOptiScalerPath, FileFingerprintCache fileFingerprintCache)
     {
         var orderedCandidates = new List<string>();
         if (!string.IsNullOrWhiteSpace(game.ManifestEntry?.PreferredProxy))
@@ -570,7 +586,7 @@ public sealed class InstallationService
                 return candidate;
             }
 
-            if (FilesMatch(sourceOptiScalerPath, destinationPath))
+            if (fileFingerprintCache.FilesMatch(sourceOptiScalerPath, destinationPath))
             {
                 return candidate;
             }
@@ -583,6 +599,7 @@ public sealed class InstallationService
         string sourceDirectoryPath,
         string destinationDirectoryPath,
         BackupSnapshotManifest snapshot,
+        FileFingerprintCache fileFingerprintCache,
         CancellationToken cancellationToken)
     {
         foreach (var sourceFile in Directory.EnumerateFiles(sourceDirectoryPath, "*", SearchOption.AllDirectories))
@@ -590,7 +607,7 @@ public sealed class InstallationService
             cancellationToken.ThrowIfCancellationRequested();
             var relativePath = Path.GetRelativePath(sourceDirectoryPath, sourceFile);
             var destinationPath = Path.Combine(destinationDirectoryPath, relativePath);
-            await ApplyManagedFileAsync(sourceFile, destinationPath, snapshot, cancellationToken);
+            await ApplyManagedFileAsync(sourceFile, destinationPath, snapshot, fileFingerprintCache, cancellationToken);
         }
     }
 
@@ -598,6 +615,7 @@ public sealed class InstallationService
         string sourcePath,
         string destinationPath,
         BackupSnapshotManifest snapshot,
+        FileFingerprintCache fileFingerprintCache,
         CancellationToken cancellationToken)
     {
         await EnsureTrackedDirectoryExistsAsync(Path.GetDirectoryName(destinationPath)!, snapshot, cancellationToken);
@@ -611,30 +629,31 @@ public sealed class InstallationService
 
         if (File.Exists(destinationPath) && string.IsNullOrWhiteSpace(backupPath))
         {
+            var originalFingerprint = fileFingerprintCache.GetFingerprint(destinationPath);
             backupPath = Path.Combine(snapshot.TransactionRootPath, relativePath);
             Directory.CreateDirectory(Path.GetDirectoryName(backupPath)!);
             File.Copy(destinationPath, backupPath, overwrite: true);
-
-            var backupInfo = new FileInfo(backupPath);
-            originalSize = backupInfo.Length;
-            originalHash = ComputeSha256(backupPath);
+            fileFingerprintCache.SetFingerprint(backupPath, originalFingerprint);
+            originalSize = originalFingerprint.Size;
+            originalHash = originalFingerprint.Sha256;
         }
 
+        var sourceFingerprint = fileFingerprintCache.GetFingerprint(sourcePath);
         await using (var source = File.OpenRead(sourcePath))
         await using (var destination = File.Create(destinationPath))
         {
             await source.CopyToAsync(destination, cancellationToken);
         }
+        fileFingerprintCache.SetFingerprint(destinationPath, sourceFingerprint);
 
-        var destinationInfo = new FileInfo(destinationPath);
         var entry = new SnapshotFileRecord
         {
             RelativePath = relativePath,
             TransactionPath = destinationPath,
             BackupPath = backupPath,
             ReplacedExistingFile = !string.IsNullOrWhiteSpace(backupPath),
-            InstalledFileSizeBytes = destinationInfo.Length,
-            InstalledFileSha256 = ComputeSha256(destinationPath),
+            InstalledFileSizeBytes = sourceFingerprint.Size,
+            InstalledFileSha256 = sourceFingerprint.Sha256,
             OriginalFileSizeBytes = originalSize,
             OriginalFileSha256 = originalHash,
             InstalledAtUtc = DateTimeOffset.UtcNow,
@@ -696,6 +715,7 @@ public sealed class InstallationService
     private async Task RefreshSnapshotFileRecordAsync(
         string filePath,
         BackupSnapshotManifest snapshot,
+        FileFingerprintCache fileFingerprintCache,
         CancellationToken cancellationToken)
     {
         var relativePath = Path.GetRelativePath(snapshot.InstallPath, filePath);
@@ -707,14 +727,15 @@ public sealed class InstallationService
             return;
         }
 
+        var refreshedFingerprint = fileFingerprintCache.GetFingerprint(filePath, refresh: true);
         var refreshed = new SnapshotFileRecord
         {
             RelativePath = existingRecord.RelativePath,
             TransactionPath = existingRecord.TransactionPath,
             BackupPath = existingRecord.BackupPath,
             ReplacedExistingFile = existingRecord.ReplacedExistingFile,
-            InstalledFileSizeBytes = new FileInfo(filePath).Length,
-            InstalledFileSha256 = ComputeSha256(filePath),
+            InstalledFileSizeBytes = refreshedFingerprint.Size,
+            InstalledFileSha256 = refreshedFingerprint.Sha256,
             OriginalFileSizeBytes = existingRecord.OriginalFileSizeBytes,
             OriginalFileSha256 = existingRecord.OriginalFileSha256,
             InstalledAtUtc = DateTimeOffset.UtcNow,
@@ -817,26 +838,6 @@ public sealed class InstallationService
         };
     }
 
-    private static string ComputeSha256(string filePath)
-    {
-        using var hash = SHA256.Create();
-        using var stream = File.OpenRead(filePath);
-        var bytes = hash.ComputeHash(stream);
-        return Convert.ToHexString(bytes);
-    }
-
-    private static bool FilesMatch(string firstPath, string secondPath)
-    {
-        using var firstHash = SHA256.Create();
-        using var secondHash = SHA256.Create();
-        using var firstStream = File.OpenRead(firstPath);
-        using var secondStream = File.OpenRead(secondPath);
-
-        var left = firstHash.ComputeHash(firstStream);
-        var right = secondHash.ComputeHash(secondStream);
-        return left.AsSpan().SequenceEqual(right);
-    }
-
     private static void TryDeleteEmptyBackupDirectories(IEnumerable<FileBackup> backups)
     {
         foreach (var directoryPath in backups
@@ -932,6 +933,46 @@ public sealed class InstallationService
         catch (UnauthorizedAccessException ex)
         {
             throw new UnauthorizedAccessException($"Cannot {action} '{relativePath}' because access was denied.", ex);
+        }
+    }
+
+    private readonly record struct FileFingerprint(long Size, string Sha256);
+
+    private sealed class FileFingerprintCache
+    {
+        private readonly Dictionary<string, FileFingerprint> fingerprints = new(StringComparer.OrdinalIgnoreCase);
+
+        public FileFingerprint GetFingerprint(string filePath, bool refresh = false)
+        {
+            if (!refresh && fingerprints.TryGetValue(filePath, out var cachedFingerprint))
+            {
+                return cachedFingerprint;
+            }
+
+            using var hash = SHA256.Create();
+            using var stream = File.OpenRead(filePath);
+            var bytes = hash.ComputeHash(stream);
+            var fingerprint = new FileFingerprint(stream.Length, Convert.ToHexString(bytes));
+            fingerprints[filePath] = fingerprint;
+            return fingerprint;
+        }
+
+        public void SetFingerprint(string filePath, FileFingerprint fingerprint)
+            => fingerprints[filePath] = fingerprint;
+
+        public bool FilesMatch(string firstPath, string secondPath)
+        {
+            var leftInfo = new FileInfo(firstPath);
+            var rightInfo = new FileInfo(secondPath);
+            if (leftInfo.Length != rightInfo.Length)
+            {
+                return false;
+            }
+
+            return string.Equals(
+                GetFingerprint(firstPath).Sha256,
+                GetFingerprint(secondPath).Sha256,
+                StringComparison.Ordinal);
         }
     }
 }

@@ -301,22 +301,28 @@ public sealed class MainViewModel : ObservableObject
         StatusText = "Installing selected games...";
         var progress = CreateProgress();
         var gpuVendor = gpuDetector.DetectGpuVendor();
+        PreparedReleaseAsset? preparedRelease = null;
 
         try
         {
+            if (gamesToInstall.Count > 1)
+            {
+                AddLog(LogSeverity.Info, $"Preparing OptiScaler once for {gamesToInstall.Count} selected games.");
+                preparedRelease = await installationService.PrepareLatestStableReleaseAsync(progress, cancellationToken);
+            }
+
             foreach (var game in gamesToInstall)
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                var outcome = await installationService.InstallAsync(
-                    game.Model,
-                    new InstallationRequest
-                    {
-                        GpuVendor = gpuVendor,
-                        ForceUnsupportedInstall = game.ForceUnsupportedInstall,
-                    },
-                    progress,
-                    cancellationToken);
+                var request = new InstallationRequest
+                {
+                    GpuVendor = gpuVendor,
+                    ForceUnsupportedInstall = game.ForceUnsupportedInstall,
+                };
+                var outcome = preparedRelease is null
+                    ? await installationService.InstallAsync(game.Model, request, progress, cancellationToken)
+                    : await installationService.InstallAsync(game.Model, request, preparedRelease, progress, cancellationToken);
 
                 AddLog(outcome.Success ? LogSeverity.Success : LogSeverity.Error, outcome.Message);
 
@@ -332,6 +338,11 @@ public sealed class MainViewModel : ObservableObject
         {
             StatusText = "Install cancelled.";
             AddLog(LogSeverity.Warning, "Install cancelled.");
+        }
+        catch (Exception exception)
+        {
+            StatusText = "Install failed.";
+            AddLog(LogSeverity.Error, exception.Message);
         }
         finally
         {

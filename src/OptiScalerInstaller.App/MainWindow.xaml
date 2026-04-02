@@ -25,6 +25,33 @@
             <Setter Property="FontSize" Value="13" />
             <Setter Property="Cursor" Value="Hand" />
         </Style>
+        <Style x:Key="VirtualizedListStyle" TargetType="ListBox">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="ScrollViewer.CanContentScroll" Value="True" />
+            <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled" />
+            <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto" />
+            <Setter Property="VirtualizingPanel.IsVirtualizing" Value="True" />
+            <Setter Property="VirtualizingPanel.ScrollUnit" Value="Pixel" />
+            <Setter Property="VirtualizingPanel.VirtualizationMode" Value="Recycling" />
+        </Style>
+        <Style x:Key="VirtualizedListItemStyle" TargetType="ListBoxItem">
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Margin" Value="0" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                          VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </Window.Resources>
 
     <Grid Margin="24">
@@ -126,65 +153,65 @@
                                        Text="No supported games found yet."
                                        Visibility="{Binding HasNoGames, Converter={StaticResource BooleanToVisibilityConverter}}" />
 
-                            <ScrollViewer VerticalScrollBarVisibility="Auto">
-                                <ItemsControl ItemsSource="{Binding Games}">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate DataType="{x:Type viewModels:DetectedGameItemViewModel}">
-                                            <Border Margin="0,0,0,12"
-                                                    Padding="14"
-                                                    Background="#0E1419"
-                                                    BorderBrush="#26323A"
-                                                    BorderThickness="1"
-                                                    CornerRadius="14">
-                                                <Grid>
-                                                    <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="Auto" />
-                                                        <ColumnDefinition Width="*" />
-                                                    </Grid.ColumnDefinitions>
+                            <ListBox ItemsSource="{Binding Games}"
+                                     Style="{StaticResource VirtualizedListStyle}"
+                                     ItemContainerStyle="{StaticResource VirtualizedListItemStyle}">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type viewModels:DetectedGameItemViewModel}">
+                                        <Border Margin="0,0,0,12"
+                                                Padding="14"
+                                                Background="#0E1419"
+                                                BorderBrush="#26323A"
+                                                BorderThickness="1"
+                                                CornerRadius="14">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
 
-                                                    <CheckBox Grid.Column="0"
-                                                              Margin="0,2,14,0"
-                                                              VerticalAlignment="Top"
-                                                              IsChecked="{Binding IsSelected}"
-                                                              IsEnabled="{Binding CanInstall}" />
+                                                <CheckBox Grid.Column="0"
+                                                          Margin="0,2,14,0"
+                                                          VerticalAlignment="Top"
+                                                          IsChecked="{Binding IsSelected}"
+                                                          IsEnabled="{Binding CanInstall}" />
 
-                                                    <StackPanel Grid.Column="1">
-                                                        <DockPanel LastChildFill="False">
-                                                            <TextBlock FontSize="16"
-                                                                       FontWeight="SemiBold"
-                                                                       Foreground="#F7F5EA"
-                                                                       Text="{Binding DisplayName}" />
-                                                            <Border Margin="12,0,0,0"
-                                                                    Padding="8,2"
-                                                                    Background="#1F2830"
-                                                                    CornerRadius="10">
-                                                                <TextBlock FontSize="12"
-                                                                           Foreground="{Binding StatusBrush}"
-                                                                           Text="{Binding StatusText}" />
-                                                            </Border>
-                                                            <Border Margin="8,0,0,0"
-                                                                    Padding="8,2"
-                                                                    Background="#24303A"
-                                                                    CornerRadius="10">
-                                                                <TextBlock FontSize="12"
-                                                                           Foreground="#A8C0D0"
-                                                                           Text="{Binding SourceLabel}" />
-                                                            </Border>
-                                                        </DockPanel>
+                                                <StackPanel Grid.Column="1">
+                                                    <DockPanel LastChildFill="False">
+                                                        <TextBlock FontSize="16"
+                                                                   FontWeight="SemiBold"
+                                                                   Foreground="#F7F5EA"
+                                                                   Text="{Binding DisplayName}" />
+                                                        <Border Margin="12,0,0,0"
+                                                                Padding="8,2"
+                                                                Background="#1F2830"
+                                                                CornerRadius="10">
+                                                            <TextBlock FontSize="12"
+                                                                       Foreground="{Binding StatusBrush}"
+                                                                       Text="{Binding StatusText}" />
+                                                        </Border>
+                                                        <Border Margin="8,0,0,0"
+                                                                Padding="8,2"
+                                                                Background="#24303A"
+                                                                CornerRadius="10">
+                                                            <TextBlock FontSize="12"
+                                                                       Foreground="#A8C0D0"
+                                                                       Text="{Binding SourceLabel}" />
+                                                        </Border>
+                                                    </DockPanel>
 
-                                                        <TextBlock Margin="0,10,0,0"
-                                                                   FontFamily="Cascadia Code"
-                                                                   FontSize="12"
-                                                                   Foreground="#90A3AF"
-                                                                   Text="{Binding InstallPath}"
-                                                                   TextWrapping="Wrap" />
-                                                    </StackPanel>
-                                                </Grid>
-                                            </Border>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-                            </ScrollViewer>
+                                                    <TextBlock Margin="0,10,0,0"
+                                                               FontFamily="Cascadia Code"
+                                                               FontSize="12"
+                                                               Foreground="#90A3AF"
+                                                               Text="{Binding InstallPath}"
+                                                               TextWrapping="Wrap" />
+                                                </StackPanel>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
                         </Grid>
                     </Grid>
                 </Border>
@@ -213,58 +240,58 @@
                                        Text="Managed installs can be undone without touching files the app didn’t create." />
                         </StackPanel>
 
-                        <ScrollViewer Grid.Row="1"
-                                      VerticalScrollBarVisibility="Auto">
-                            <ItemsControl ItemsSource="{Binding InstalledGames}">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate DataType="{x:Type viewModels:InstallRecordItemViewModel}">
-                                        <Border Margin="0,0,0,12"
-                                                Padding="14"
-                                                Background="#0E1419"
-                                                BorderBrush="#26323A"
-                                                BorderThickness="1"
-                                                CornerRadius="14">
-                                            <Grid>
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="*" />
-                                                    <ColumnDefinition Width="Auto" />
-                                                </Grid.ColumnDefinitions>
+                        <ListBox Grid.Row="1"
+                                 ItemsSource="{Binding InstalledGames}"
+                                 Style="{StaticResource VirtualizedListStyle}"
+                                 ItemContainerStyle="{StaticResource VirtualizedListItemStyle}">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate DataType="{x:Type viewModels:InstallRecordItemViewModel}">
+                                    <Border Margin="0,0,0,12"
+                                            Padding="14"
+                                            Background="#0E1419"
+                                            BorderBrush="#26323A"
+                                            BorderThickness="1"
+                                            CornerRadius="14">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
 
-                                                <StackPanel>
-                                                    <TextBlock FontSize="15"
-                                                               FontWeight="SemiBold"
-                                                               Foreground="#F7F5EA"
-                                                               Text="{Binding DisplayName}" />
-                                                    <TextBlock Margin="0,6,0,0"
-                                                               FontSize="12"
-                                                               Foreground="#9CB0BD"
-                                                               Text="{Binding Details}" />
-                                                    <TextBlock Margin="0,8,0,0"
-                                                               FontFamily="Cascadia Code"
-                                                               FontSize="11"
-                                                               Foreground="#8196A3"
-                                                               Text="{Binding InstallPath}"
-                                                               TextWrapping="Wrap" />
-                                                </StackPanel>
+                                            <StackPanel>
+                                                <TextBlock FontSize="15"
+                                                           FontWeight="SemiBold"
+                                                           Foreground="#F7F5EA"
+                                                           Text="{Binding DisplayName}" />
+                                                <TextBlock Margin="0,6,0,0"
+                                                           FontSize="12"
+                                                           Foreground="#9CB0BD"
+                                                           Text="{Binding Details}" />
+                                                <TextBlock Margin="0,8,0,0"
+                                                           FontFamily="Cascadia Code"
+                                                           FontSize="11"
+                                                           Foreground="#8196A3"
+                                                           Text="{Binding InstallPath}"
+                                                           TextWrapping="Wrap" />
+                                            </StackPanel>
 
-                                                <Button Grid.Column="1"
-                                                        Padding="12,6"
-                                                        Margin="12,0,0,0"
-                                                        VerticalAlignment="Center"
-                                                        Background="#3A2121"
-                                                        BorderBrush="#6E3838"
-                                                        BorderThickness="1"
-                                                        Command="{Binding DataContext.UndoCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                        CommandParameter="{Binding}"
-                                                        Content="Undo"
-                                                        Cursor="Hand"
-                                                        Foreground="#F7F5EA" />
-                                            </Grid>
-                                        </Border>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                        </ScrollViewer>
+                                            <Button Grid.Column="1"
+                                                    Padding="12,6"
+                                                    Margin="12,0,0,0"
+                                                    VerticalAlignment="Center"
+                                                    Background="#3A2121"
+                                                    BorderBrush="#6E3838"
+                                                    BorderThickness="1"
+                                                    Command="{Binding DataContext.UndoCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                    CommandParameter="{Binding}"
+                                                    Content="Undo"
+                                                    Cursor="Hand"
+                                                    Foreground="#F7F5EA" />
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
                     </Grid>
                 </Border>
             </Grid>
@@ -293,28 +320,28 @@
                                    Text="Live installer output, download steps, warnings, and undo activity." />
                     </StackPanel>
 
-                    <ScrollViewer x:Name="LogScrollViewer"
-                                  Grid.Row="1"
-                                  VerticalScrollBarVisibility="Auto">
-                        <ItemsControl ItemsSource="{Binding Logs}">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate DataType="{x:Type viewModels:LogEntryViewModel}">
-                                    <TextBlock Margin="0,0,0,6"
-                                               FontFamily="Cascadia Code"
-                                               Foreground="{Binding Foreground}"
-                                               TextWrapping="Wrap">
-                                        <Run Foreground="#5D707D"
-                                             Text="[ " />
-                                        <Run Foreground="#5D707D"
-                                             Text="{Binding Time}" />
-                                        <Run Foreground="#5D707D"
-                                             Text=" ] " />
-                                        <Run Text="{Binding Message}" />
-                                    </TextBlock>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                    </ScrollViewer>
+                    <ListBox x:Name="LogList"
+                             Grid.Row="1"
+                             ItemsSource="{Binding Logs}"
+                             Style="{StaticResource VirtualizedListStyle}"
+                             ItemContainerStyle="{StaticResource VirtualizedListItemStyle}">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate DataType="{x:Type viewModels:LogEntryViewModel}">
+                                <TextBlock Margin="0,0,0,6"
+                                           FontFamily="Cascadia Code"
+                                           Foreground="{Binding Foreground}"
+                                           TextWrapping="Wrap">
+                                    <Run Foreground="#5D707D"
+                                         Text="[ " />
+                                    <Run Foreground="#5D707D"
+                                         Text="{Binding Time}" />
+                                    <Run Foreground="#5D707D"
+                                         Text=" ] " />
+                                    <Run Text="{Binding Message}" />
+                                </TextBlock>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
                 </Grid>
             </Border>
         </Grid>

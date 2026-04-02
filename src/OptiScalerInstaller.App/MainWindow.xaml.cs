@@ -26,9 +26,10 @@ public partial class MainWindow : Window
 
     private void OnLogsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
-        if (e.Action is NotifyCollectionChangedAction.Add or NotifyCollectionChangedAction.Reset)
+        if (e.Action is NotifyCollectionChangedAction.Add or NotifyCollectionChangedAction.Reset &&
+            LogList.Items.Count > 0)
         {
-            LogScrollViewer.ScrollToEnd();
+            LogList.ScrollIntoView(LogList.Items[LogList.Items.Count - 1]);
         }
     }
 }

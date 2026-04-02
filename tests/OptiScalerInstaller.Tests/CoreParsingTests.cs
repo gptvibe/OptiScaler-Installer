@@ -119,4 +119,32 @@ public sealed class CoreParsingTests
         Assert.Equal("Test Game", result.DisplayName);
         Assert.EndsWith("testgame.exe", result.ExePath, StringComparison.OrdinalIgnoreCase);
     }
+
+    [Fact]
+    public void TryFindExecutable_UsesHeuristicBinaryDirectoriesBeyondGeneralScanDepth()
+    {
+        using var temp = new TemporaryDirectory();
+        var gameRoot = Path.Combine(temp.Path, "Game");
+        var exePath = Path.Combine(gameRoot, "Engine", "Programs", "Binaries", "Win64", "testgame.exe");
+        Directory.CreateDirectory(Path.GetDirectoryName(exePath)!);
+        File.WriteAllText(exePath, "stub");
+
+        var match = GameScannerService.TryFindExecutable(gameRoot, ["testgame.exe"]);
+
+        Assert.Equal(exePath, match);
+    }
+
+    [Fact]
+    public void TryFindExecutable_IgnoresExecutablesPastBoundedDepthWithoutHeuristicMatch()
+    {
+        using var temp = new TemporaryDirectory();
+        var gameRoot = Path.Combine(temp.Path, "Game");
+        var exePath = Path.Combine(gameRoot, "one", "two", "three", "four", "five", "testgame.exe");
+        Directory.CreateDirectory(Path.GetDirectoryName(exePath)!);
+        File.WriteAllText(exePath, "stub");
+
+        var match = GameScannerService.TryFindExecutable(gameRoot, ["testgame.exe"]);
+
+        Assert.Null(match);
+    }
 }

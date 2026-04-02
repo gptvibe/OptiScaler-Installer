@@ -11,6 +11,7 @@ Windows utility for automatically detecting supported games, downloading the lat
 - Lets you pick one game or install to all detected supported games
 - Supports manual folder selection for non-Steam games
 - Downloads the latest stable OptiScaler release automatically (with retry and timeout)
+- Caches latest-release metadata for the session and reuses one prepared release across multi-game installs
 - Falls back to a previously downloaded local cache when GitHub is unreachable
 - Installs OptiScaler with safe proxy DLL selection
 - Runs preflight checks (writability, locked files, disk space) before every install
@@ -45,6 +46,7 @@ This is the main release artifact. No zip is required for normal use.
 
 - The app downloads the latest stable OptiScaler release automatically when you install.
 - If GitHub is unreachable, the installer transparently falls back to the most recently downloaded local cache (`%LocalAppData%\OptiScalerInstaller\cache\`).
+- Multi-game install runs now prepare the GitHub release once, reuse it across selected games, and use bounded executable scanning plus virtualized UI lists to keep large libraries responsive.
 - Before installing, the app verifies the game folder is writable, no target files are locked (game is not running), and there is at least 200 MB of free disk space.
 - CPU does not matter for detection or install behavior here. Only the detected graphics vendor is used.
 - If your system has both an Intel iGPU and an Nvidia GPU, the app will prefer showing `Nvidia`.
