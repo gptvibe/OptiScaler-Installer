@@ -175,12 +175,16 @@ public sealed class InstallationService
             {
                 var pluginSourcePath = await releaseAssetProvider.GetOptiPatcherPluginAsync(progress, cancellationToken);
                 var pluginsDirectoryPath = Path.Combine(game.InstallPath, "plugins");
-                Directory.CreateDirectory(pluginsDirectoryPath);
-                snapshot.CreatedDirectories.Add(Path.GetRelativePath(game.InstallPath, pluginsDirectoryPath));
+                await EnsureTrackedDirectoryExistsAsync(pluginsDirectoryPath, snapshot, cancellationToken);
 
                 var pluginDestinationPath = Path.Combine(pluginsDirectoryPath, "OptiPatcher.asi");
                 await ApplyManagedFileAsync(pluginSourcePath, pluginDestinationPath, snapshot, cancellationToken);
-                EnableAsiPlugins(Path.Combine(game.InstallPath, "OptiScaler.ini"));
+                var iniPath = Path.Combine(game.InstallPath, "OptiScaler.ini");
+                if (EnableAsiPlugins(iniPath))
+                {
+                    await RefreshSnapshotFileRecordAsync(iniPath, snapshot, cancellationToken);
+                }
+
                 usedOptiPatcher = true;
             }
 
@@ -235,9 +239,9 @@ public sealed class InstallationService
         {
             progress?.Report(InstallerLogEntry.Create(LogSeverity.Error, ex.Message));
 
-            if (snapshot is not null && snapshot.Files.Any(file => file.ReplacedExistingFile))
+            if (snapshot is not null)
             {
-                await RollbackFailedInstallAsync(snapshot, progress, CancellationToken.None);
+                await HandleFailedInstallAsync(snapshot, progress);
             }
 
             return InstallOutcome.Failed(
@@ -248,9 +252,9 @@ public sealed class InstallationService
         {
             progress?.Report(InstallerLogEntry.Create(LogSeverity.Error, exception.Message));
 
-            if (snapshot is not null && snapshot.Files.Any(file => file.ReplacedExistingFile))
+            if (snapshot is not null)
             {
-                await RollbackFailedInstallAsync(snapshot, progress, CancellationToken.None);
+                await HandleFailedInstallAsync(snapshot, progress);
             }
 
             return InstallOutcome.Failed($"Installation failed: {exception.Message}", FailureKind.InstallFailed);
@@ -268,7 +272,8 @@ public sealed class InstallationService
         IProgress<InstallerLogEntry>? progress = null,
         CancellationToken cancellationToken = default)
     {
-        var snapshot = await installStateStore.FindLatestSnapshotByGameKeyAsync(gameKey, cancellationToken);
+        var snapshot = await installStateStore.FindLatestRecoverableSnapshotByGameKeyAsync(gameKey, cancellationToken)
+            ?? await installStateStore.FindLatestSnapshotByGameKeyAsync(gameKey, cancellationToken);
         if (snapshot is null)
         {
             return InstallOutcome.Failed($"No backup snapshot was found for game key '{gameKey}'.", FailureKind.UndoFailed);
@@ -392,45 +397,8 @@ public sealed class InstallationService
             await installStateStore.UpsertSnapshotAsync(snapshot, cancellationToken);
 
             Directory.CreateDirectory(stagingRoot);
-            foreach (var replacedFile in snapshot.Files
-                .Where(file => file.ReplacedExistingFile)
-                .OrderBy(file => file.RelativePath, StringComparer.OrdinalIgnoreCase))
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                if (string.IsNullOrWhiteSpace(replacedFile.BackupPath))
-                {
-                    continue;
-                }
-
-                if (!File.Exists(replacedFile.BackupPath))
-                {
-                    var destinationPath = Path.Combine(snapshot.InstallPath, replacedFile.RelativePath);
-                    if (File.Exists(destinationPath))
-                    {
-                        continue;
-                    }
-
-                    throw new IOException($"Backup file is missing: {replacedFile.BackupPath}");
-                }
-
-                var stagedPath = Path.Combine(stagingRoot, replacedFile.RelativePath);
-                Directory.CreateDirectory(Path.GetDirectoryName(stagedPath)!);
-                File.Copy(replacedFile.BackupPath, stagedPath, overwrite: true);
-            }
-
-            foreach (var createdFile in snapshot.Files
-                .Where(file => !file.ReplacedExistingFile)
-                .Select(file => file.RelativePath)
-                .OrderByDescending(path => path.Length)
-                .Distinct(StringComparer.OrdinalIgnoreCase))
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                var fullPath = Path.Combine(snapshot.InstallPath, createdFile);
-                if (File.Exists(fullPath))
-                {
-                    File.Delete(fullPath);
-                }
-            }
+            StageRestoreFiles(snapshot, stagingRoot, cancellationToken);
+            ValidateRestoreTargets(snapshot);
 
             foreach (var replacedFile in snapshot.Files
                 .Where(file => file.ReplacedExistingFile)
@@ -446,6 +414,20 @@ public sealed class InstallationService
                 var restorePath = Path.Combine(snapshot.InstallPath, replacedFile.RelativePath);
                 Directory.CreateDirectory(Path.GetDirectoryName(restorePath)!);
                 File.Copy(stagedPath, restorePath, overwrite: true);
+            }
+
+            foreach (var createdFile in snapshot.Files
+                .Where(file => !file.ReplacedExistingFile)
+                .Select(file => file.RelativePath)
+                .OrderByDescending(path => path.Length)
+                .Distinct(StringComparer.OrdinalIgnoreCase))
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var fullPath = Path.Combine(snapshot.InstallPath, createdFile);
+                if (File.Exists(fullPath))
+                {
+                    File.Delete(fullPath);
+                }
             }
 
             foreach (var directory in snapshot.CreatedDirectories
@@ -554,6 +536,19 @@ public sealed class InstallationService
         }
     }
 
+    private async Task HandleFailedInstallAsync(
+        BackupSnapshotManifest snapshot,
+        IProgress<InstallerLogEntry>? progress)
+    {
+        if (SnapshotHasMutations(snapshot))
+        {
+            await RollbackFailedInstallAsync(snapshot, progress, CancellationToken.None);
+            return;
+        }
+
+        await installStateStore.RemoveSnapshotAsync(snapshot.SnapshotId, CancellationToken.None);
+    }
+
     private string? SelectProxyName(DetectedGame game, string sourceOptiScalerPath)
     {
         var orderedCandidates = new List<string>();
@@ -595,12 +590,6 @@ public sealed class InstallationService
             cancellationToken.ThrowIfCancellationRequested();
             var relativePath = Path.GetRelativePath(sourceDirectoryPath, sourceFile);
             var destinationPath = Path.Combine(destinationDirectoryPath, relativePath);
-            var relativeDirectory = Path.GetRelativePath(snapshot.InstallPath, Path.GetDirectoryName(destinationPath)!);
-            if (!snapshot.CreatedDirectories.Contains(relativeDirectory, StringComparer.OrdinalIgnoreCase))
-            {
-                snapshot.CreatedDirectories.Add(relativeDirectory);
-            }
-
             await ApplyManagedFileAsync(sourceFile, destinationPath, snapshot, cancellationToken);
         }
     }
@@ -611,7 +600,7 @@ public sealed class InstallationService
         BackupSnapshotManifest snapshot,
         CancellationToken cancellationToken)
     {
-        Directory.CreateDirectory(Path.GetDirectoryName(destinationPath)!);
+        await EnsureTrackedDirectoryExistsAsync(Path.GetDirectoryName(destinationPath)!, snapshot, cancellationToken);
         var relativePath = Path.GetRelativePath(snapshot.InstallPath, destinationPath);
         var existingRecord = snapshot.Files.FirstOrDefault(file =>
             string.Equals(file.RelativePath, relativePath, StringComparison.OrdinalIgnoreCase));
@@ -661,24 +650,109 @@ public sealed class InstallationService
         await installStateStore.UpsertSnapshotAsync(snapshot, cancellationToken);
     }
 
-    private static void EnableAsiPlugins(string iniPath)
+    private async Task EnsureTrackedDirectoryExistsAsync(
+        string directoryPath,
+        BackupSnapshotManifest snapshot,
+        CancellationToken cancellationToken)
     {
-        if (!File.Exists(iniPath))
+        var createdDirectories = new Stack<string>();
+        var current = directoryPath;
+        while (!string.IsNullOrWhiteSpace(current) &&
+               !Directory.Exists(current) &&
+               current.StartsWith(snapshot.InstallPath, StringComparison.OrdinalIgnoreCase))
+        {
+            createdDirectories.Push(current);
+            current = Path.GetDirectoryName(current)!;
+        }
+
+        Directory.CreateDirectory(directoryPath);
+
+        var changed = false;
+        while (createdDirectories.Count > 0)
+        {
+            var createdDirectory = createdDirectories.Pop();
+            var relativeDirectory = Path.GetRelativePath(snapshot.InstallPath, createdDirectory);
+            if (string.Equals(relativeDirectory, ".", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            if (snapshot.CreatedDirectories.Contains(relativeDirectory, StringComparer.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            snapshot.CreatedDirectories.Add(relativeDirectory);
+            changed = true;
+        }
+
+        if (changed)
+        {
+            snapshot.LastUpdatedAtUtc = DateTimeOffset.UtcNow;
+            await installStateStore.UpsertSnapshotAsync(snapshot, cancellationToken);
+        }
+    }
+
+    private async Task RefreshSnapshotFileRecordAsync(
+        string filePath,
+        BackupSnapshotManifest snapshot,
+        CancellationToken cancellationToken)
+    {
+        var relativePath = Path.GetRelativePath(snapshot.InstallPath, filePath);
+        var existingRecord = snapshot.Files.FirstOrDefault(file =>
+            string.Equals(file.RelativePath, relativePath, StringComparison.OrdinalIgnoreCase));
+
+        if (existingRecord is null || !File.Exists(filePath))
         {
             return;
         }
 
+        var refreshed = new SnapshotFileRecord
+        {
+            RelativePath = existingRecord.RelativePath,
+            TransactionPath = existingRecord.TransactionPath,
+            BackupPath = existingRecord.BackupPath,
+            ReplacedExistingFile = existingRecord.ReplacedExistingFile,
+            InstalledFileSizeBytes = new FileInfo(filePath).Length,
+            InstalledFileSha256 = ComputeSha256(filePath),
+            OriginalFileSizeBytes = existingRecord.OriginalFileSizeBytes,
+            OriginalFileSha256 = existingRecord.OriginalFileSha256,
+            InstalledAtUtc = DateTimeOffset.UtcNow,
+        };
+
+        snapshot.Files.Remove(existingRecord);
+        snapshot.Files.Add(refreshed);
+        snapshot.LastUpdatedAtUtc = DateTimeOffset.UtcNow;
+        await installStateStore.UpsertSnapshotAsync(snapshot, cancellationToken);
+    }
+
+    private static bool EnableAsiPlugins(string iniPath)
+    {
+        if (!File.Exists(iniPath))
+        {
+            return false;
+        }
+
         var content = File.ReadAllText(iniPath);
+        var updated = false;
         if (content.Contains("LoadAsiPlugins=auto", StringComparison.OrdinalIgnoreCase))
         {
             content = content.Replace("LoadAsiPlugins=auto", "LoadAsiPlugins=true", StringComparison.OrdinalIgnoreCase);
+            updated = true;
         }
         else if (!content.Contains("LoadAsiPlugins=true", StringComparison.OrdinalIgnoreCase))
         {
             content = $"{content}{Environment.NewLine}LoadAsiPlugins=true{Environment.NewLine}";
+            updated = true;
+        }
+
+        if (!updated)
+        {
+            return false;
         }
 
         File.WriteAllText(iniPath, content);
+        return true;
     }
 
     private static bool ShouldInstallOptiPatcher(DetectedGame game, InstallationRequest request)
@@ -780,6 +854,84 @@ public sealed class InstallationService
             {
                 Directory.Delete(directoryPath, recursive: false);
             }
+        }
+    }
+
+    private static bool SnapshotHasMutations(BackupSnapshotManifest snapshot)
+        => snapshot.Files.Count > 0 || snapshot.CreatedDirectories.Count > 0;
+
+    private static void StageRestoreFiles(
+        BackupSnapshotManifest snapshot,
+        string stagingRoot,
+        CancellationToken cancellationToken)
+    {
+        foreach (var replacedFile in snapshot.Files
+            .Where(file => file.ReplacedExistingFile)
+            .OrderBy(file => file.RelativePath, StringComparer.OrdinalIgnoreCase))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (string.IsNullOrWhiteSpace(replacedFile.BackupPath))
+            {
+                continue;
+            }
+
+            if (!File.Exists(replacedFile.BackupPath))
+            {
+                var destinationPath = Path.Combine(snapshot.InstallPath, replacedFile.RelativePath);
+                if (File.Exists(destinationPath))
+                {
+                    continue;
+                }
+
+                throw new IOException($"Backup file is missing: {replacedFile.BackupPath}");
+            }
+
+            var stagedPath = Path.Combine(stagingRoot, replacedFile.RelativePath);
+            Directory.CreateDirectory(Path.GetDirectoryName(stagedPath)!);
+            File.Copy(replacedFile.BackupPath, stagedPath, overwrite: true);
+        }
+    }
+
+    private static void ValidateRestoreTargets(BackupSnapshotManifest snapshot)
+    {
+        foreach (var replacedFile in snapshot.Files
+            .Where(file => file.ReplacedExistingFile)
+            .OrderBy(file => file.RelativePath, StringComparer.OrdinalIgnoreCase))
+        {
+            var restorePath = Path.Combine(snapshot.InstallPath, replacedFile.RelativePath);
+            ValidateWritableFile(restorePath, replacedFile.RelativePath, action: "restore");
+        }
+
+        foreach (var createdFile in snapshot.Files
+            .Where(file => !file.ReplacedExistingFile)
+            .Select(file => file.RelativePath)
+            .Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            var createdPath = Path.Combine(snapshot.InstallPath, createdFile);
+            ValidateWritableFile(createdPath, createdFile, action: "remove");
+        }
+
+        ValidateWritableFile(snapshot.MarkerPath, Path.GetFileName(snapshot.MarkerPath), action: "remove");
+    }
+
+    private static void ValidateWritableFile(string filePath, string relativePath, string action)
+    {
+        if (!File.Exists(filePath))
+        {
+            return;
+        }
+
+        try
+        {
+            using var probe = new FileStream(filePath, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+        }
+        catch (IOException ex)
+        {
+            throw new IOException($"Cannot {action} '{relativePath}' because the file is in use.", ex);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            throw new UnauthorizedAccessException($"Cannot {action} '{relativePath}' because access was denied.", ex);
         }
     }
 }

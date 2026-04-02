@@ -61,6 +61,7 @@ The installer keeps a manifest of files it created or replaced.
 
 When you click `Undo`, it will:
 
+- stage backup payload and validate restore targets before mutating the game folder
 - remove files created by the installer
 - restore backed-up files that were replaced
 - keep unrelated files untouched
@@ -72,7 +73,7 @@ When you click `Undo`, it will:
 - Snapshot state is independent from `installs.json`, so backup recovery still works if install state is missing or corrupted.
 - Before mutating game files, the installer writes a `Pending` snapshot and records file-level metadata (created/replaced path, backup path, file sizes, SHA-256 hashes, release tag, proxy DLL, timestamps, and status).
 - If install fails after backups begin, rollback runs automatically.
-- On startup, the app detects pending/failed snapshots and prompts to recover them.
+- If restore or rollback is interrupted, the snapshot remains recoverable and the app prompts to resume recovery on startup.
 
 ## Resilience
 
@@ -80,7 +81,7 @@ When you click `Undo`, it will:
 |---|---|
 | GitHub unreachable | Retries up to 3× with exponential backoff (1 s → 2 s → 4 s) then falls back to the most recent local cache |
 | Corrupted `installs.json` | Backed up as `installs.json.corrupted` and treated as empty so the app can still run |
-| Atomic writes | Both `installs.json` and per-game manifests are written to a `.tmp` file first, then renamed, so a crash mid-write never corrupts state |
+| Atomic writes | `installs.json`, `backup-snapshots.json`, and per-game manifests are written to a `.tmp` file first, then renamed, so a crash mid-write never corrupts state |
 | Locked / in-use files | Preflight check detects locked target files before any download begins |
 | Unwritable folder | Preflight check rejects the install immediately with a clear message |
 | Low disk space | Preflight check requires ≥ 200 MB free on the install drive |

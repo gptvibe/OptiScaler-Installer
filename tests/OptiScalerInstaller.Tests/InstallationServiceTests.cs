@@ -1,4 +1,5 @@
 using OptiScalerInstaller.Core;
+using System.Security.Cryptography;
 
 namespace OptiScalerInstaller.Tests;
 
@@ -151,6 +152,35 @@ public sealed class InstallationServiceTests
     }
 
     [Fact]
+    public async Task InstallAsync_MidInstallFailureAfterCreatingFiles_AutoRollsBackCreatedFiles()
+    {
+        using var temp = new TemporaryDirectory();
+        var appPaths = new AppPaths(Path.Combine(temp.Path, "appdata"));
+        var payloadPath = CreatePayload(temp.Path);
+        var stateStore = new InstallStateStore(appPaths);
+        var provider = new ThrowingPluginReleaseAssetProvider(payloadPath);
+        var service = new InstallationService(appPaths, provider, stateStore);
+
+        var gamePath = Path.Combine(temp.Path, "CreateOnlyRollbackGame");
+        Directory.CreateDirectory(gamePath);
+
+        var game = CreateGame("Create Only Rollback Game", gamePath, InstallPolicy.Supported, requiresOptiPatcher: true);
+        var outcome = await service.InstallAsync(
+            game,
+            new InstallationRequest { GpuVendor = GpuVendor.Intel },
+            new Progress<InstallerLogEntry>());
+
+        Assert.False(outcome.Success);
+        Assert.False(File.Exists(Path.Combine(gamePath, "dxgi.dll")));
+        Assert.False(File.Exists(Path.Combine(gamePath, "OptiScaler.ini")));
+        Assert.False(File.Exists(Path.Combine(gamePath, "OptiScalerInstaller.manifest.json")));
+
+        var snapshot = await stateStore.FindLatestSnapshotByGameKeyAsync(game.GameKey);
+        Assert.NotNull(snapshot);
+        Assert.Equal(SnapshotTransactionStatus.RolledBack, snapshot!.Status);
+    }
+
+    [Fact]
     public async Task UndoAsync_MidRestoreFailure_PreservesBackupsForRetry()
     {
         using var temp = new TemporaryDirectory();
@@ -183,6 +213,7 @@ public sealed class InstallationServiceTests
         var failedUndo = await service.UndoAsync(installOutcome.Record!, new Progress<InstallerLogEntry>());
 
         Assert.False(failedUndo.Success);
+        Assert.True(File.Exists(Path.Combine(gamePath, "dxgi.dll")));
         Assert.True(File.Exists(backupPath!));
 
         var failedSnapshot = await stateStore.FindLatestSnapshotByGameKeyAsync(game.GameKey);
@@ -249,6 +280,37 @@ public sealed class InstallationServiceTests
         Assert.False(File.Exists(Path.Combine(gamePath, "OptiScalerInstaller.manifest.json")));
     }
 
+    [Fact]
+    public async Task InstallAsync_OptiPatcherSnapshotTracksFinalIniMetadata()
+    {
+        using var temp = new TemporaryDirectory();
+        var appPaths = new AppPaths(Path.Combine(temp.Path, "appdata"));
+        var payloadPath = CreatePayload(temp.Path);
+        var stateStore = new InstallStateStore(appPaths);
+        var provider = new TestReleaseAssetProvider(payloadPath, Path.Combine(payloadPath, "OptiPatcher.asi"));
+        var service = new InstallationService(appPaths, provider, stateStore);
+
+        var gamePath = Path.Combine(temp.Path, "IniMetadataGame");
+        Directory.CreateDirectory(gamePath);
+
+        var game = CreateGame("Ini Metadata Game", gamePath, InstallPolicy.Supported, requiresOptiPatcher: true);
+        var outcome = await service.InstallAsync(
+            game,
+            new InstallationRequest { GpuVendor = GpuVendor.Intel },
+            new Progress<InstallerLogEntry>());
+
+        Assert.True(outcome.Success);
+
+        var snapshot = await stateStore.FindLatestSnapshotByGameKeyAsync(game.GameKey);
+        Assert.NotNull(snapshot);
+
+        var iniPath = Path.Combine(gamePath, "OptiScaler.ini");
+        var iniRecord = snapshot!.Files.Single(file => file.RelativePath == "OptiScaler.ini");
+        Assert.Contains("LoadAsiPlugins=true", await File.ReadAllTextAsync(iniPath));
+        Assert.Equal(new FileInfo(iniPath).Length, iniRecord.InstalledFileSizeBytes);
+        Assert.Equal(ComputeSha256(iniPath), iniRecord.InstalledFileSha256);
+    }
+
     private static DetectedGame CreateGame(string displayName, string installPath, InstallPolicy policy, bool requiresOptiPatcher = false)
         => new()
         {
@@ -294,6 +356,13 @@ public sealed class InstallationServiceTests
         File.WriteAllText(Path.Combine(licensesPath, "DirectX_LICENSE.txt"), "license");
 
         return payloadPath;
+    }
+
+    private static string ComputeSha256(string filePath)
+    {
+        using var hash = SHA256.Create();
+        using var stream = File.OpenRead(filePath);
+        return Convert.ToHexString(hash.ComputeHash(stream));
     }
 
     private sealed class TestReleaseAssetProvider : IReleaseAssetProvider

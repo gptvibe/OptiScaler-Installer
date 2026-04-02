@@ -90,6 +90,55 @@ public sealed class ResilienceTests
         Assert.Equal("steam-recovery", loaded[0].GameKey);
     }
 
+    [Fact]
+    public async Task InstallStateStore_LoadRecoverableSnapshots_IncludesInterruptedTransactions()
+    {
+        using var temp = new TemporaryDirectory();
+        var appPaths = new AppPaths(Path.Combine(temp.Path, "appdata"));
+        var store = new InstallStateStore(appPaths);
+
+        foreach (var status in new[]
+        {
+            SnapshotTransactionStatus.Pending,
+            SnapshotTransactionStatus.RollingBack,
+            SnapshotTransactionStatus.RollbackFailed,
+            SnapshotTransactionStatus.Restoring,
+            SnapshotTransactionStatus.RestoreFailed,
+            SnapshotTransactionStatus.Applied,
+            SnapshotTransactionStatus.RolledBack,
+            SnapshotTransactionStatus.Restored,
+        })
+        {
+            await store.UpsertSnapshotAsync(new BackupSnapshotManifest
+            {
+                SnapshotId = $"snapshot-{status}",
+                GameKey = $"game-{status}",
+                DisplayName = status.ToString(),
+                InstallPath = Path.Combine(temp.Path, status.ToString()),
+                MarkerPath = Path.Combine(temp.Path, status.ToString(), "OptiScalerInstaller.manifest.json"),
+                ReleaseTag = "v-test",
+                ProxyName = "dxgi.dll",
+                TransactionRootPath = Path.Combine(temp.Path, "backups", status.ToString()),
+                CreatedAtUtc = DateTimeOffset.UtcNow.AddMinutes((int)status),
+                LastUpdatedAtUtc = DateTimeOffset.UtcNow,
+                Status = status,
+            });
+        }
+
+        var recoverable = await store.LoadRecoverableSnapshotsAsync();
+        var statuses = recoverable.Select(snapshot => snapshot.Status).ToHashSet();
+
+        Assert.Equal(5, recoverable.Count);
+        Assert.Contains(SnapshotTransactionStatus.Pending, statuses);
+        Assert.Contains(SnapshotTransactionStatus.RollingBack, statuses);
+        Assert.Contains(SnapshotTransactionStatus.RollbackFailed, statuses);
+        Assert.Contains(SnapshotTransactionStatus.Restoring, statuses);
+        Assert.Contains(SnapshotTransactionStatus.RestoreFailed, statuses);
+        Assert.DoesNotContain(SnapshotTransactionStatus.Applied, statuses);
+        Assert.DoesNotContain(SnapshotTransactionStatus.RolledBack, statuses);
+        Assert.DoesNotContain(SnapshotTransactionStatus.Restored, statuses);
+    }
+
     // ── Offline cache fallback ───────────────────────────────────────────────
 
     [Fact]

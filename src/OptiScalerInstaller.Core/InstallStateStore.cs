@@ -103,10 +103,7 @@ public sealed class InstallStateStore
     {
         var snapshots = await LoadSnapshotsAsync(cancellationToken);
         return snapshots
-            .Where(snapshot => snapshot.Status is
-                SnapshotTransactionStatus.Pending or
-                SnapshotTransactionStatus.RollbackFailed or
-                SnapshotTransactionStatus.RestoreFailed)
+            .Where(snapshot => IsRecoverableStatus(snapshot.Status))
             .OrderBy(snapshot => snapshot.CreatedAtUtc)
             .ToList();
     }
@@ -116,6 +113,17 @@ public sealed class InstallStateStore
         var snapshots = await LoadSnapshotsAsync(cancellationToken);
         return snapshots
             .Where(snapshot => string.Equals(snapshot.GameKey, gameKey, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(snapshot => snapshot.CreatedAtUtc)
+            .FirstOrDefault();
+    }
+
+    public async Task<BackupSnapshotManifest?> FindLatestRecoverableSnapshotByGameKeyAsync(string gameKey, CancellationToken cancellationToken = default)
+    {
+        var snapshots = await LoadSnapshotsAsync(cancellationToken);
+        return snapshots
+            .Where(snapshot =>
+                string.Equals(snapshot.GameKey, gameKey, StringComparison.OrdinalIgnoreCase) &&
+                IsRecoverableStatus(snapshot.Status))
             .OrderByDescending(snapshot => snapshot.CreatedAtUtc)
             .FirstOrDefault();
     }
@@ -274,4 +282,12 @@ public sealed class InstallStateStore
 
         File.Move(tempPath, appPaths.SnapshotStateFilePath, overwrite: true);
     }
+
+    private static bool IsRecoverableStatus(SnapshotTransactionStatus status)
+        => status is
+            SnapshotTransactionStatus.Pending or
+            SnapshotTransactionStatus.RollingBack or
+            SnapshotTransactionStatus.RollbackFailed or
+            SnapshotTransactionStatus.Restoring or
+            SnapshotTransactionStatus.RestoreFailed;
 }
