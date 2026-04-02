@@ -88,6 +88,131 @@ public sealed class CoreParsingTests
     }
 
     [Fact]
+    public async Task SupportedGameCatalogService_RejectsEntriesWithoutExecutables()
+    {
+        using var temp = new TemporaryDirectory();
+        var catalogPath = Path.Combine(temp.Path, "supported-games.json");
+        await File.WriteAllTextAsync(
+            catalogPath,
+            """
+            [
+              {
+                "displayName": "Broken Game",
+                "exeNames": [],
+                "installPolicy": "Supported"
+              }
+            ]
+            """);
+
+        var service = new SupportedGameCatalogService(catalogPath);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => service.LoadAsync());
+        Assert.Contains("exeNames", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task SupportedGameCatalogService_RejectsDuplicateSteamAppIds()
+    {
+        using var temp = new TemporaryDirectory();
+        var catalogPath = Path.Combine(temp.Path, "supported-games.json");
+        await File.WriteAllTextAsync(
+            catalogPath,
+            """
+            [
+              {
+                "steamAppId": 1000,
+                "displayName": "Game One",
+                "exeNames": [ "game1.exe" ],
+                "installPolicy": "Supported"
+              },
+              {
+                "steamAppId": 1000,
+                "displayName": "Game Two",
+                "exeNames": [ "game2.exe" ],
+                "installPolicy": "Warn"
+              }
+            ]
+            """);
+
+        var service = new SupportedGameCatalogService(catalogPath);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => service.LoadAsync());
+        Assert.Contains("Duplicate steamAppId", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task SupportedGameCatalogService_RejectsInvalidProxyAndNotesUrl()
+    {
+        using var temp = new TemporaryDirectory();
+        var catalogPath = Path.Combine(temp.Path, "supported-games.json");
+        await File.WriteAllTextAsync(
+            catalogPath,
+            """
+            [
+              {
+                "displayName": "Broken Game",
+                "exeNames": [ "game.exe" ],
+                "preferredProxy": "plugins\\dxgi.dll",
+                "notesUrl": "ftp://example.test/not-supported",
+                "installPolicy": "Supported"
+              }
+            ]
+            """);
+
+        var service = new SupportedGameCatalogService(catalogPath);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => service.LoadAsync());
+        Assert.Contains("preferredProxy", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("notesUrl", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task SupportedGamesJson_PassesSchemaValidation()
+    {
+        var catalogPath = Path.Combine(AppContext.BaseDirectory, "data", "supported-games.json");
+        Assert.True(File.Exists(catalogPath), $"Catalog file was not found at '{catalogPath}'.");
+
+        var service = new SupportedGameCatalogService(catalogPath);
+        var catalog = await service.LoadAsync();
+
+        Assert.NotEmpty(catalog.Entries);
+        Assert.All(catalog.Entries, entry =>
+        {
+            Assert.False(string.IsNullOrWhiteSpace(entry.DisplayName));
+            Assert.NotEmpty(entry.ExeNames);
+            Assert.All(entry.ExeNames, exeName =>
+            {
+                Assert.EndsWith(".exe", exeName, StringComparison.OrdinalIgnoreCase);
+                Assert.Equal(exeName, Path.GetFileName(exeName));
+            });
+        });
+        Assert.Equal(
+            catalog.Entries.Count(entry => entry.SteamAppId.HasValue),
+            catalog.Entries.Where(entry => entry.SteamAppId.HasValue).Select(entry => entry.SteamAppId).Distinct().Count());
+        Assert.All(catalog.Entries, entry =>
+        {
+            if (!string.IsNullOrWhiteSpace(entry.PreferredProxy))
+            {
+                Assert.Equal(entry.PreferredProxy, Path.GetFileName(entry.PreferredProxy));
+                Assert.EndsWith(".dll", entry.PreferredProxy, StringComparison.OrdinalIgnoreCase);
+            }
+
+            Assert.All(entry.FallbackProxies, proxy =>
+            {
+                Assert.Equal(proxy, Path.GetFileName(proxy));
+                Assert.EndsWith(".dll", proxy, StringComparison.OrdinalIgnoreCase);
+            });
+
+            if (!string.IsNullOrWhiteSpace(entry.NotesUrl))
+            {
+                var notesUrl = Assert.IsType<string>(entry.NotesUrl);
+                Assert.True(Uri.TryCreate(notesUrl, UriKind.Absolute, out var uri));
+                Assert.Contains(uri!.Scheme, new[] { Uri.UriSchemeHttp, Uri.UriSchemeHttps });
+            }
+        });
+    }
+
+    [Fact]
     public async Task InspectManualFolderAsync_MatchesKnownExecutable()
     {
         using var temp = new TemporaryDirectory();

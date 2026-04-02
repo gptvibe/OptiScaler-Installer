@@ -2,7 +2,7 @@ using System.Security.Cryptography;
 
 namespace OptiScalerInstaller.Core;
 
-public sealed class InstallationService
+public sealed class InstallationService : IInstallationWorkflowService
 {
     private static readonly string[] DefaultProxyOrder =
     [
@@ -49,6 +49,9 @@ public sealed class InstallationService
 
     public async Task<IReadOnlyList<InstallRecord>> LoadInstalledGamesAsync(CancellationToken cancellationToken = default)
         => await installStateStore.LoadAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<BackupSnapshotManifest>> LoadSnapshotsAsync(CancellationToken cancellationToken = default)
+        => await installStateStore.LoadSnapshotsAsync(cancellationToken);
 
     public async Task<IReadOnlyList<BackupSnapshotManifest>> LoadRecoverableSnapshotsAsync(CancellationToken cancellationToken = default)
         => await installStateStore.LoadRecoverableSnapshotsAsync(cancellationToken);
@@ -115,6 +118,17 @@ public sealed class InstallationService
             var resolvedPreparedRelease = preparedRelease
                 ?? await releaseAssetProvider.PrepareLatestStableReleaseAsync(progress, cancellationToken);
             var releaseRoot = resolvedPreparedRelease.ExtractedPath;
+            try
+            {
+                GitHubReleaseAssetProvider.ValidatePreparedPayload(releaseRoot);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return InstallOutcome.Failed(
+                    $"The downloaded OptiScaler package failed validation: {ex.Message}",
+                    FailureKind.InstallFailed);
+            }
+
             var optiScalerSourcePath = Path.Combine(releaseRoot, "OptiScaler.dll");
             if (!File.Exists(optiScalerSourcePath))
             {
@@ -296,6 +310,37 @@ public sealed class InstallationService
         }
 
         return await RestoreFromSnapshotAsync(snapshot, progress, removeFromState: true, cancellationToken);
+    }
+
+    public async Task<InstallOutcome> RestoreSnapshotAsync(
+        string snapshotId,
+        IProgress<InstallerLogEntry>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        var snapshot = await installStateStore.FindSnapshotByIdAsync(snapshotId, cancellationToken);
+        if (snapshot is null)
+        {
+            return InstallOutcome.Failed($"No backup snapshot was found for snapshot id '{snapshotId}'.", FailureKind.UndoFailed);
+        }
+
+        return await RestoreFromSnapshotAsync(snapshot, progress, removeFromState: true, cancellationToken);
+    }
+
+    public async Task<bool> DeleteSnapshotAsync(string snapshotId, CancellationToken cancellationToken = default)
+    {
+        var snapshot = await installStateStore.FindSnapshotByIdAsync(snapshotId, cancellationToken);
+        if (snapshot is null)
+        {
+            return false;
+        }
+
+        if (Directory.Exists(snapshot.TransactionRootPath))
+        {
+            Directory.Delete(snapshot.TransactionRootPath, recursive: true);
+        }
+
+        await installStateStore.RemoveSnapshotAsync(snapshotId, cancellationToken);
+        return true;
     }
 
     private async Task<InstallOutcome> UndoInternalAsync(

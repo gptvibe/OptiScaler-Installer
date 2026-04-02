@@ -7,14 +7,15 @@
         mc:Ignorable="d"
         Title="OptiScaler Auto Installer"
         Icon="app.ico"
-        Width="1380"
-        Height="860"
-        MinWidth="1180"
-        MinHeight="760"
+        Width="1480"
+        Height="920"
+        MinWidth="1220"
+        MinHeight="780"
         Background="#101417"
         WindowStartupLocation="CenterScreen">
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
+
         <Style x:Key="ActionButtonStyle" TargetType="Button">
             <Setter Property="Padding" Value="14,8" />
             <Setter Property="Margin" Value="0,0,10,0" />
@@ -24,7 +25,164 @@
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="FontSize" Value="13" />
             <Setter Property="Cursor" Value="Hand" />
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#2E3D48" />
+                    <Setter Property="BorderBrush" Value="#5C7484" />
+                </Trigger>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Foreground" Value="#8194A1" />
+                    <Setter Property="Background" Value="#182129" />
+                    <Setter Property="BorderBrush" Value="#2B3842" />
+                    <Setter Property="Opacity" Value="1" />
+                </Trigger>
+            </Style.Triggers>
         </Style>
+
+        <Style x:Key="PrimaryActionButtonStyle" TargetType="Button" BasedOn="{StaticResource ActionButtonStyle}">
+            <Setter Property="Background" Value="#214336" />
+            <Setter Property="BorderBrush" Value="#3D7B64" />
+        </Style>
+
+        <Style x:Key="SlimButtonStyle" TargetType="Button" BasedOn="{StaticResource ActionButtonStyle}">
+            <Setter Property="Padding" Value="10,6" />
+            <Setter Property="Margin" Value="0,0,8,0" />
+            <Setter Property="FontSize" Value="12" />
+        </Style>
+
+        <Style x:Key="DarkTextBoxStyle" TargetType="TextBox">
+            <Setter Property="Foreground" Value="#F7F5EA" />
+            <Setter Property="Background" Value="#0E1419" />
+            <Setter Property="BorderBrush" Value="#32404A" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="10,7" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="CaretBrush" Value="#F7F5EA" />
+            <Setter Property="SelectionBrush" Value="#33566A" />
+        </Style>
+
+        <Style x:Key="DarkComboBoxItemStyle" TargetType="ComboBoxItem">
+            <Setter Property="Foreground" Value="#F7F5EA" />
+            <Setter Property="Background" Value="#111920" />
+            <Setter Property="Padding" Value="10,7" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBoxItem">
+                        <Border x:Name="ItemBorder"
+                                Background="{TemplateBinding Background}">
+                            <ContentPresenter Margin="{TemplateBinding Padding}"
+                                              HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                              VerticalAlignment="Center"
+                                              TextElement.Foreground="{TemplateBinding Foreground}" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsHighlighted" Value="True">
+                                <Setter TargetName="ItemBorder" Property="Background" Value="#2A4E63" />
+                                <Setter Property="Foreground" Value="#F7F5EA" />
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="ItemBorder" Property="Background" Value="#214336" />
+                                <Setter Property="Foreground" Value="#F7F5EA" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Foreground" Value="#768894" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="DarkComboBoxStyle" TargetType="ComboBox">
+            <Setter Property="Foreground" Value="#F7F5EA" />
+            <Setter Property="Background" Value="#0E1419" />
+            <Setter Property="BorderBrush" Value="#32404A" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="6,4" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="MinHeight" Value="34" />
+            <Setter Property="ItemContainerStyle" Value="{StaticResource DarkComboBoxItemStyle}" />
+            <Setter Property="TextElement.Foreground" Value="#F7F5EA" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBox">
+                        <Grid>
+                            <ToggleButton x:Name="DropDownToggle"
+                                          Background="Transparent"
+                                          BorderThickness="0"
+                                          ClickMode="Press"
+                                          Focusable="False"
+                                          IsChecked="{Binding IsDropDownOpen, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}">
+                                <Border x:Name="ComboBorder"
+                                        Background="{TemplateBinding Background}"
+                                        BorderBrush="{TemplateBinding BorderBrush}"
+                                        BorderThickness="{TemplateBinding BorderThickness}"
+                                        CornerRadius="8"
+                                        Padding="{TemplateBinding Padding}">
+                                    <Grid>
+                                        <ContentPresenter Margin="4,0,24,0"
+                                                          VerticalAlignment="Center"
+                                                          HorizontalAlignment="Left"
+                                                          Content="{TemplateBinding SelectionBoxItem}"
+                                                          ContentStringFormat="{TemplateBinding SelectionBoxItemStringFormat}"
+                                                          ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
+                                                          TextElement.Foreground="{TemplateBinding Foreground}" />
+                                        <Path x:Name="DropDownArrow"
+                                              Width="10"
+                                              Height="6"
+                                              Margin="0,0,6,0"
+                                              HorizontalAlignment="Right"
+                                              VerticalAlignment="Center"
+                                              Data="M 0 0 L 5 5 L 10 0 Z"
+                                              Fill="#C9D9E3"
+                                              Stretch="Fill" />
+                                    </Grid>
+                                </Border>
+                            </ToggleButton>
+
+                            <Popup x:Name="PART_Popup"
+                                   AllowsTransparency="True"
+                                   Focusable="False"
+                                   IsOpen="{TemplateBinding IsDropDownOpen}"
+                                   Placement="Bottom"
+                                   PopupAnimation="Slide">
+                                <Border Margin="0,6,0,0"
+                                        MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}"
+                                        Background="#111920"
+                                        BorderBrush="#456173"
+                                        BorderThickness="1"
+                                        CornerRadius="10">
+                                    <ScrollViewer MaxHeight="{TemplateBinding MaxDropDownHeight}">
+                                        <ItemsPresenter KeyboardNavigation.DirectionalNavigation="Contained" />
+                                    </ScrollViewer>
+                                </Border>
+                            </Popup>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ComboBorder" Property="BorderBrush" Value="#5C7484" />
+                                <Setter TargetName="ComboBorder" Property="Background" Value="#131B21" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                                <Setter TargetName="ComboBorder" Property="BorderBrush" Value="#68A6C7" />
+                            </Trigger>
+                            <Trigger Property="IsDropDownOpen" Value="True">
+                                <Setter TargetName="ComboBorder" Property="BorderBrush" Value="#68A6C7" />
+                                <Setter TargetName="ComboBorder" Property="Background" Value="#131B21" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Foreground" Value="#8194A1" />
+                                <Setter TargetName="ComboBorder" Property="Background" Value="#182129" />
+                                <Setter TargetName="ComboBorder" Property="BorderBrush" Value="#2B3842" />
+                                <Setter TargetName="DropDownArrow" Property="Fill" Value="#6E8593" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <Style x:Key="VirtualizedListStyle" TargetType="ListBox">
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
@@ -36,18 +194,49 @@
             <Setter Property="VirtualizingPanel.ScrollUnit" Value="Pixel" />
             <Setter Property="VirtualizingPanel.VirtualizationMode" Value="Recycling" />
         </Style>
+
         <Style x:Key="VirtualizedListItemStyle" TargetType="ListBoxItem">
             <Setter Property="Padding" Value="0" />
             <Setter Property="Margin" Value="0" />
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
-            <Setter Property="Focusable" Value="False" />
             <Setter Property="HorizontalContentAlignment" Value="Stretch" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ListBoxItem">
                         <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
                                           VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="DarkTabItemStyle" TargetType="TabItem">
+            <Setter Property="Foreground" Value="#C9D9E3" />
+            <Setter Property="Background" Value="#161E24" />
+            <Setter Property="Padding" Value="16,10" />
+            <Setter Property="BorderBrush" Value="#2E3942" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Margin" Value="0,0,8,0" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TabItem">
+                        <Border x:Name="TabBorder"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="12,12,0,0"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter ContentSource="Header"
+                                              HorizontalAlignment="Center"
+                                              VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="TabBorder" Property="Background" Value="#24303A" />
+                                <Setter Property="Foreground" Value="#F7F5EA" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
@@ -68,233 +257,762 @@
                 BorderThickness="1"
                 CornerRadius="18">
             <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
 
-                <StackPanel>
-                    <TextBlock FontFamily="Cascadia Code"
-                               FontSize="26"
-                               FontWeight="SemiBold"
-                               Foreground="#F7F5EA"
-                               Text="OptiScaler Auto Installer" />
-                    <TextBlock Margin="0,6,0,0"
-                               FontSize="14"
-                               Foreground="#A5B7C3"
-                               Text="{Binding GpuVendorText}" />
-                    <TextBlock Margin="0,4,0,0"
-                               FontSize="14"
-                               Foreground="#7FD1A3"
-                               Text="{Binding StatusText}" />
-                </StackPanel>
+                <Grid Grid.Row="0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
 
-                <StackPanel Grid.Column="1"
-                            Orientation="Horizontal"
-                            VerticalAlignment="Center">
-                    <Button Style="{StaticResource ActionButtonStyle}"
-                            Command="{Binding RefreshCommand}"
-                            Content="Refresh Scan" />
-                    <Button Style="{StaticResource ActionButtonStyle}"
-                            Command="{Binding BrowseFolderCommand}"
-                            Content="Manual Folder" />
-                    <Button Style="{StaticResource ActionButtonStyle}"
-                            Command="{Binding InstallSelectedCommand}"
-                            Content="Install Selected" />
-                    <Button Margin="0"
-                            Style="{StaticResource ActionButtonStyle}"
-                            Command="{Binding InstallAllCommand}"
-                            Content="Install All" />
-                </StackPanel>
+                    <StackPanel>
+                        <TextBlock FontFamily="Cascadia Code"
+                                   FontSize="26"
+                                   FontWeight="SemiBold"
+                                   Foreground="#F7F5EA"
+                                   Text="OptiScaler Auto Installer" />
+                        <TextBlock Margin="0,6,0,0"
+                                   FontSize="14"
+                                   Foreground="#A5B7C3"
+                                   Text="{Binding GpuVendorText}" />
+                        <TextBlock Margin="0,4,0,0"
+                                   FontSize="14"
+                                   Foreground="#7FD1A3"
+                                   Text="{Binding StatusText}" />
+                        <TextBlock Margin="0,4,0,0"
+                                   FontSize="13"
+                                   Foreground="#9CB0BD"
+                                   Text="{Binding CurrentStepText}" />
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="1"
+                                Orientation="Horizontal"
+                                VerticalAlignment="Top">
+                        <Button Style="{StaticResource ActionButtonStyle}"
+                                Command="{Binding RefreshCommand}"
+                                Content="Refresh Scan" />
+                        <Button Style="{StaticResource ActionButtonStyle}"
+                                Command="{Binding BrowseFolderCommand}"
+                                Content="Manual Folder" />
+                        <Button Style="{StaticResource PrimaryActionButtonStyle}"
+                                Command="{Binding InstallSelectedCommand}"
+                                Content="Install Selected" />
+                        <Button Margin="0"
+                                Style="{StaticResource PrimaryActionButtonStyle}"
+                                Command="{Binding InstallAllCommand}"
+                                Content="Install All" />
+                    </StackPanel>
+                </Grid>
+
+                <Border Grid.Row="1"
+                        Margin="0,18,0,0"
+                        Padding="14"
+                        Background="#0F171D"
+                        BorderBrush="#2E3942"
+                        BorderThickness="1"
+                        CornerRadius="14"
+                        Visibility="{Binding IsProgressVisible, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <StackPanel>
+                            <TextBlock FontSize="13"
+                                       Foreground="#C9D9E3"
+                                       Text="{Binding CurrentStepText}" />
+                            <ProgressBar Margin="0,10,0,0"
+                                         Height="12"
+                                         Minimum="0"
+                                         Maximum="{Binding ProgressMaximum, Mode=OneWay}"
+                                         Value="{Binding ProgressValue, Mode=OneWay}"
+                                         IsIndeterminate="{Binding IsProgressIndeterminate, Mode=OneWay}" />
+                            <TextBlock Margin="0,8,0,0"
+                                       FontSize="12"
+                                       Foreground="#8DA0AD"
+                                       Text="{Binding ProgressText}" />
+                        </StackPanel>
+
+                        <Button Grid.Column="1"
+                                Padding="12,6"
+                                Margin="18,0,0,0"
+                                VerticalAlignment="Center"
+                                Background="#3A2121"
+                                BorderBrush="#6E3838"
+                                BorderThickness="1"
+                                Command="{Binding CancelCommand}"
+                                Content="Cancel"
+                                Cursor="Hand"
+                                Foreground="#F7F5EA" />
+                    </Grid>
+                </Border>
+
+                <Border Grid.Row="2"
+                        Margin="0,14,0,0"
+                        Padding="14"
+                        Background="{Binding BannerBackgroundBrush}"
+                        BorderBrush="{Binding BannerAccentBrush}"
+                        BorderThickness="1"
+                        CornerRadius="14"
+                        Visibility="{Binding HasBanner, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <StackPanel>
+                            <TextBlock FontSize="14"
+                                       FontWeight="SemiBold"
+                                       Foreground="{Binding BannerAccentBrush}"
+                                       Text="{Binding BannerTitle}" />
+                            <TextBlock Margin="0,6,0,0"
+                                       FontSize="13"
+                                       Foreground="#F7F5EA"
+                                       Text="{Binding BannerMessage}"
+                                       TextWrapping="Wrap" />
+                        </StackPanel>
+
+                        <Button Grid.Column="1"
+                                Padding="10,4"
+                                Margin="14,0,0,0"
+                                VerticalAlignment="Top"
+                                Background="#24303A"
+                                BorderBrush="#3F515E"
+                                BorderThickness="1"
+                                Command="{Binding DismissBannerCommand}"
+                                Content="Dismiss"
+                                Cursor="Hand"
+                                Foreground="#F7F5EA" />
+                    </Grid>
+                </Border>
             </Grid>
         </Border>
 
         <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="2.2*" />
-                <ColumnDefinition Width="1.5*" />
+                <ColumnDefinition Width="2.25*" />
+                <ColumnDefinition Width="1.2*" />
             </Grid.ColumnDefinitions>
 
-            <Grid Grid.Column="0"
-                  Margin="0,0,20,0">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="2*" />
-                    <RowDefinition Height="1.2*" />
-                </Grid.RowDefinitions>
+            <TabControl Grid.Column="0"
+                        Margin="0,0,20,0"
+                        Background="Transparent"
+                        BorderThickness="0">
+                <TabControl.Resources>
+                    <Style TargetType="TabItem" BasedOn="{StaticResource DarkTabItemStyle}" />
+                </TabControl.Resources>
 
-                <Border Grid.Row="0"
-                        Padding="18"
-                        Background="#161E24"
-                        BorderBrush="#2E3942"
-                        BorderThickness="1"
-                        CornerRadius="18">
-                    <Grid>
+                <TabItem Header="Games">
+                    <Grid Margin="0,16,0,0">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="*" />
                         </Grid.RowDefinitions>
 
-                        <StackPanel Margin="0,0,0,14">
-                            <TextBlock FontSize="20"
-                                       FontWeight="SemiBold"
-                                       Foreground="#F7F5EA"
-                                       Text="Detected Games" />
-                            <TextBlock Margin="0,6,0,0"
-                                       FontSize="13"
-                                       Foreground="#9CB0BD"
-                                       Text="Steam titles are auto-scanned on launch. Manual folders can be added at any time." />
-                        </StackPanel>
+                        <Border Grid.Row="0"
+                                Margin="0,0,0,16"
+                                Padding="16"
+                                Background="#161E24"
+                                BorderBrush="#2E3942"
+                                BorderThickness="1"
+                                CornerRadius="18">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+
+                                <TextBox Grid.Column="0"
+                                         Width="280"
+                                         Style="{StaticResource DarkTextBoxStyle}"
+                                         Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
+                                <ComboBox Grid.Column="1"
+                                          Width="170"
+                                          Margin="12,0,0,0"
+                                          Style="{StaticResource DarkComboBoxStyle}"
+                                          DisplayMemberPath="Label"
+                                          ItemsSource="{Binding GameFilters}"
+                                          SelectedItem="{Binding SelectedGameFilter}" />
+                                <Button Grid.Column="2"
+                                        Margin="12,0,0,0"
+                                        Style="{StaticResource SlimButtonStyle}"
+                                        Command="{Binding SelectAllVisibleCommand}"
+                                        Content="Select All" />
+                                <Button Grid.Column="3"
+                                        Margin="4,0,0,0"
+                                        Style="{StaticResource SlimButtonStyle}"
+                                        Command="{Binding SelectNoneVisibleCommand}"
+                                        Content="Select None" />
+                                <TextBlock Grid.Column="4"
+                                           HorizontalAlignment="Right"
+                                           VerticalAlignment="Center"
+                                           FontSize="12"
+                                           Foreground="#9CB0BD"
+                                           Text="{Binding VisibleGamesSummaryText}" />
+                            </Grid>
+                        </Border>
 
                         <Grid Grid.Row="1">
-                            <TextBlock HorizontalAlignment="Center"
-                                       VerticalAlignment="Center"
-                                       FontSize="15"
-                                       Foreground="#8196A3"
-                                       Text="No supported games found yet."
-                                       Visibility="{Binding HasNoGames, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="1.55*" />
+                                <ColumnDefinition Width="1*" />
+                            </Grid.ColumnDefinitions>
 
-                            <ListBox ItemsSource="{Binding Games}"
-                                     Style="{StaticResource VirtualizedListStyle}"
-                                     ItemContainerStyle="{StaticResource VirtualizedListItemStyle}">
-                                <ListBox.ItemTemplate>
-                                    <DataTemplate DataType="{x:Type viewModels:DetectedGameItemViewModel}">
-                                        <Border Margin="0,0,0,12"
-                                                Padding="14"
-                                                Background="#0E1419"
-                                                BorderBrush="#26323A"
-                                                BorderThickness="1"
-                                                CornerRadius="14">
-                                            <Grid>
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="Auto" />
-                                                    <ColumnDefinition Width="*" />
-                                                </Grid.ColumnDefinitions>
+                            <Border Grid.Column="0"
+                                    Padding="18"
+                                    Background="#161E24"
+                                    BorderBrush="#2E3942"
+                                    BorderThickness="1"
+                                    CornerRadius="18">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="*" />
+                                    </Grid.RowDefinitions>
 
-                                                <CheckBox Grid.Column="0"
-                                                          Margin="0,2,14,0"
-                                                          VerticalAlignment="Top"
-                                                          IsChecked="{Binding IsSelected}"
-                                                          IsEnabled="{Binding CanInstall}" />
+                                    <StackPanel Margin="0,0,0,14">
+                                        <TextBlock FontSize="20"
+                                                   FontWeight="SemiBold"
+                                                   Foreground="#F7F5EA"
+                                                   Text="Detected Games" />
+                                        <TextBlock Margin="0,6,0,0"
+                                                   FontSize="13"
+                                                   Foreground="#9CB0BD"
+                                                   Text="Search, filter, and pick the titles you want to install or review." />
+                                    </StackPanel>
 
-                                                <StackPanel Grid.Column="1">
-                                                    <DockPanel LastChildFill="False">
-                                                        <TextBlock FontSize="16"
-                                                                   FontWeight="SemiBold"
-                                                                   Foreground="#F7F5EA"
-                                                                   Text="{Binding DisplayName}" />
-                                                        <Border Margin="12,0,0,0"
-                                                                Padding="8,2"
-                                                                Background="#1F2830"
-                                                                CornerRadius="10">
-                                                            <TextBlock FontSize="12"
-                                                                       Foreground="{Binding StatusBrush}"
-                                                                       Text="{Binding StatusText}" />
+                                    <Grid Grid.Row="1">
+                                        <TextBlock HorizontalAlignment="Center"
+                                                   VerticalAlignment="Center"
+                                                   FontSize="15"
+                                                   Foreground="#8196A3"
+                                                   Text="{Binding EmptyGamesMessage}"
+                                                   Visibility="{Binding HasNoVisibleGames, Converter={StaticResource BooleanToVisibilityConverter}}" />
+
+                                        <ListBox ItemsSource="{Binding VisibleGames}"
+                                                 SelectedItem="{Binding SelectedGame, Mode=TwoWay}"
+                                                 Style="{StaticResource VirtualizedListStyle}"
+                                                 ItemContainerStyle="{StaticResource VirtualizedListItemStyle}">
+                                            <ListBox.ItemTemplate>
+                                                <DataTemplate DataType="{x:Type viewModels:DetectedGameItemViewModel}">
+                                                    <Border x:Name="GameCard"
+                                                            Margin="0,0,0,12"
+                                                            Padding="14"
+                                                            Background="#0E1419"
+                                                            BorderBrush="#26323A"
+                                                            BorderThickness="1"
+                                                            CornerRadius="14">
+                                                        <Grid>
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="Auto" />
+                                                                <ColumnDefinition Width="*" />
+                                                            </Grid.ColumnDefinitions>
+
+                                                            <CheckBox Grid.Column="0"
+                                                                      Margin="0,2,14,0"
+                                                                      VerticalAlignment="Top"
+                                                                      IsChecked="{Binding IsSelected}"
+                                                                      IsEnabled="{Binding CanSelect}" />
+
+                                                            <StackPanel Grid.Column="1">
+                                                                <WrapPanel>
+                                                                    <TextBlock FontSize="16"
+                                                                               FontWeight="SemiBold"
+                                                                               Foreground="#F7F5EA"
+                                                                               Text="{Binding DisplayName}" />
+                                                                    <Border Margin="10,0,0,0"
+                                                                            Padding="8,2"
+                                                                            Background="#1F2830"
+                                                                            CornerRadius="10">
+                                                                        <TextBlock FontSize="12"
+                                                                                   Foreground="{Binding StatusBrush}"
+                                                                                   Text="{Binding StatusText}" />
+                                                                    </Border>
+                                                                    <Border Margin="8,0,0,0"
+                                                                            Padding="8,2"
+                                                                            Background="#24303A"
+                                                                            CornerRadius="10">
+                                                                        <TextBlock FontSize="12"
+                                                                                   Foreground="#A8C0D0"
+                                                                                   Text="{Binding SourceLabel}" />
+                                                                    </Border>
+                                                                    <Border Margin="8,0,0,0"
+                                                                            Padding="8,2"
+                                                                            Background="#214336"
+                                                                            CornerRadius="10"
+                                                                            Visibility="{Binding HasInstalledRecord, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                                                        <TextBlock FontSize="12"
+                                                                                   Foreground="#92F6B8"
+                                                                                   Text="Managed" />
+                                                                    </Border>
+                                                                </WrapPanel>
+
+                                                                <TextBlock Margin="0,8,0,0"
+                                                                           FontSize="12"
+                                                                           Foreground="#9CB0BD"
+                                                                           Text="{Binding SupportNote}"
+                                                                           TextWrapping="Wrap" />
+                                                                <TextBlock Margin="0,10,0,0"
+                                                                           FontFamily="Cascadia Code"
+                                                                           FontSize="12"
+                                                                           Foreground="#90A3AF"
+                                                                           Text="{Binding InstallPath}"
+                                                                           TextWrapping="Wrap" />
+                                                            </StackPanel>
+                                                        </Grid>
+                                                    </Border>
+                                                    <DataTemplate.Triggers>
+                                                        <DataTrigger Binding="{Binding RelativeSource={RelativeSource AncestorType=ListBoxItem}, Path=IsSelected}"
+                                                                     Value="True">
+                                                            <Setter TargetName="GameCard" Property="BorderBrush" Value="#4D7087" />
+                                                            <Setter TargetName="GameCard" Property="Background" Value="#132028" />
+                                                        </DataTrigger>
+                                                    </DataTemplate.Triggers>
+                                                </DataTemplate>
+                                            </ListBox.ItemTemplate>
+                                        </ListBox>
+                                    </Grid>
+                                </Grid>
+                            </Border>
+
+                            <Grid Grid.Column="1"
+                                  Margin="18,0,0,0">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="1.05*" />
+                                    <RowDefinition Height="0.95*" />
+                                </Grid.RowDefinitions>
+
+                                <Border Grid.Row="0"
+                                        Padding="18"
+                                        Background="#161E24"
+                                        BorderBrush="#2E3942"
+                                        BorderThickness="1"
+                                        CornerRadius="18">
+                                    <Grid>
+                                        <TextBlock HorizontalAlignment="Center"
+                                                   VerticalAlignment="Center"
+                                                   FontSize="14"
+                                                   Foreground="#8196A3"
+                                                   Text="Select a detected game to review its details."
+                                                   TextWrapping="Wrap">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Visibility" Value="Visible" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding HasSelectedGame}" Value="True">
+                                                            <Setter Property="Visibility" Value="Collapsed" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+
+                                        <ContentControl Content="{Binding SelectedGame}">
+                                            <ContentControl.Style>
+                                                <Style TargetType="ContentControl">
+                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding HasSelectedGame}" Value="True">
+                                                            <Setter Property="Visibility" Value="Visible" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </ContentControl.Style>
+                                            <ContentControl.ContentTemplate>
+                                                <DataTemplate DataType="{x:Type viewModels:DetectedGameItemViewModel}">
+                                                    <Grid>
+                                                        <Grid.RowDefinitions>
+                                                            <RowDefinition Height="Auto" />
+                                                            <RowDefinition Height="*" />
+                                                            <RowDefinition Height="Auto" />
+                                                        </Grid.RowDefinitions>
+
+                                                        <StackPanel>
+                                                            <TextBlock FontSize="20"
+                                                                       FontWeight="SemiBold"
+                                                                       Foreground="#F7F5EA"
+                                                                       Text="{Binding DisplayName}" />
+                                                            <WrapPanel Margin="0,8,0,0">
+                                                                <Border Padding="8,2"
+                                                                        Background="#1F2830"
+                                                                        CornerRadius="10">
+                                                                    <TextBlock FontSize="12"
+                                                                               Foreground="{Binding StatusBrush}"
+                                                                               Text="{Binding StatusText}" />
+                                                                </Border>
+                                                                <Border Margin="8,0,0,0"
+                                                                        Padding="8,2"
+                                                                        Background="#24303A"
+                                                                        CornerRadius="10">
+                                                                    <TextBlock FontSize="12"
+                                                                               Foreground="#A8C0D0"
+                                                                               Text="{Binding SourceLabel}" />
+                                                                </Border>
+                                                                <Border Margin="8,0,0,0"
+                                                                        Padding="8,2"
+                                                                        Background="#214336"
+                                                                        CornerRadius="10"
+                                                                        Visibility="{Binding HasInstalledRecord, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                                                    <TextBlock FontSize="12"
+                                                                               Foreground="#92F6B8"
+                                                                               Text="Managed install" />
+                                                                </Border>
+                                                            </WrapPanel>
+                                                        </StackPanel>
+
+                                                        <StackPanel Grid.Row="1"
+                                                                    Margin="0,18,0,0">
+                                                            <TextBlock FontSize="13"
+                                                                       Foreground="#9CB0BD"
+                                                                       Text="{Binding SupportNote}"
+                                                                       TextWrapping="Wrap" />
+
+                                                            <CheckBox Margin="0,14,0,0"
+                                                                      Foreground="#F7F5EA"
+                                                                      IsChecked="{Binding ForceUnsupportedInstall}"
+                                                                      Content="Enable manual override for unsupported install">
+                                                                <CheckBox.Style>
+                                                                    <Style TargetType="CheckBox">
+                                                                        <Setter Property="Visibility" Value="Collapsed" />
+                                                                        <Style.Triggers>
+                                                                            <DataTrigger Binding="{Binding CanToggleUnsupportedOverride}" Value="True">
+                                                                                <Setter Property="Visibility" Value="Visible" />
+                                                                            </DataTrigger>
+                                                                        </Style.Triggers>
+                                                                    </Style>
+                                                                </CheckBox.Style>
+                                                            </CheckBox>
+
+                                                            <Grid Margin="0,18,0,0">
+                                                                <Grid.ColumnDefinitions>
+                                                                    <ColumnDefinition Width="Auto" />
+                                                                    <ColumnDefinition Width="*" />
+                                                                </Grid.ColumnDefinitions>
+                                                                <Grid.RowDefinitions>
+                                                                    <RowDefinition Height="Auto" />
+                                                                    <RowDefinition Height="Auto" />
+                                                                    <RowDefinition Height="Auto" />
+                                                                    <RowDefinition Height="Auto" />
+                                                                    <RowDefinition Height="Auto" />
+                                                                    <RowDefinition Height="Auto" />
+                                                                </Grid.RowDefinitions>
+
+                                                                <TextBlock FontSize="12" Foreground="#7D8F9B" Text="Path" />
+                                                                <TextBlock Grid.Column="1"
+                                                                           FontFamily="Cascadia Code"
+                                                                           FontSize="12"
+                                                                           Foreground="#C9D9E3"
+                                                                           Text="{Binding InstallPath}"
+                                                                           TextWrapping="Wrap" />
+
+                                                                <TextBlock Grid.Row="1"
+                                                                           FontSize="12"
+                                                                           Foreground="#7D8F9B"
+                                                                           Text="Executable" />
+                                                                <TextBlock Grid.Row="1"
+                                                                           Grid.Column="1"
+                                                                           FontFamily="Cascadia Code"
+                                                                           FontSize="12"
+                                                                           Foreground="#C9D9E3"
+                                                                           Text="{Binding ExecutablePath}"
+                                                                           TextWrapping="Wrap" />
+
+                                                                <TextBlock Grid.Row="2"
+                                                                           FontSize="12"
+                                                                           Foreground="#7D8F9B"
+                                                                           Text="Proxy choice" />
+                                                                <TextBlock Grid.Row="2"
+                                                                           Grid.Column="1"
+                                                                           FontSize="12"
+                                                                           Foreground="#C9D9E3"
+                                                                           Text="{Binding ProxyChoiceText}"
+                                                                           TextWrapping="Wrap" />
+
+                                                                <TextBlock Grid.Row="3"
+                                                                           FontSize="12"
+                                                                           Foreground="#7D8F9B"
+                                                                           Text="Release tag" />
+                                                                <TextBlock Grid.Row="3"
+                                                                           Grid.Column="1"
+                                                                           FontSize="12"
+                                                                           Foreground="#C9D9E3"
+                                                                           Text="{Binding DataContext.SelectedGameReleaseTagText, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                           TextWrapping="Wrap" />
+
+                                                                <TextBlock Grid.Row="4"
+                                                                           FontSize="12"
+                                                                           Foreground="#7D8F9B"
+                                                                           Text="Managed state" />
+                                                                <TextBlock Grid.Row="4"
+                                                                           Grid.Column="1"
+                                                                           FontSize="12"
+                                                                           Foreground="#C9D9E3"
+                                                                           Text="{Binding ManagedStateText}"
+                                                                           TextWrapping="Wrap" />
+
+                                                                <TextBlock Grid.Row="5"
+                                                                           FontSize="12"
+                                                                           Foreground="#7D8F9B"
+                                                                           Text="Latest snapshot" />
+                                                                <TextBlock Grid.Row="5"
+                                                                           Grid.Column="1"
+                                                                           FontSize="12"
+                                                                           Foreground="#C9D9E3"
+                                                                           Text="{Binding SnapshotText}"
+                                                                           TextWrapping="Wrap" />
+                                                            </Grid>
+                                                        </StackPanel>
+
+                                                        <Button Grid.Row="2"
+                                                                Margin="0,18,0,0"
+                                                                HorizontalAlignment="Left"
+                                                                Style="{StaticResource SlimButtonStyle}"
+                                                                Command="{Binding DataContext.OpenSelectedGameFolderCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                Content="Open Folder" />
+                                                    </Grid>
+                                                </DataTemplate>
+                                            </ContentControl.ContentTemplate>
+                                        </ContentControl>
+                                    </Grid>
+                                </Border>
+
+                                <Border Grid.Row="1"
+                                        Margin="0,18,0,0"
+                                        Padding="18"
+                                        Background="#161E24"
+                                        BorderBrush="#2E3942"
+                                        BorderThickness="1"
+                                        CornerRadius="18">
+                                    <Grid>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="*" />
+                                        </Grid.RowDefinitions>
+
+                                        <StackPanel Margin="0,0,0,14">
+                                            <TextBlock FontSize="20"
+                                                       FontWeight="SemiBold"
+                                                       Foreground="#F7F5EA"
+                                                       Text="Managed Installs" />
+                                            <TextBlock Margin="0,6,0,0"
+                                                       FontSize="13"
+                                                       Foreground="#9CB0BD"
+                                                       Text="Use Undo to restore the last managed snapshot for a game." />
+                                        </StackPanel>
+
+                                        <Grid Grid.Row="1">
+                                            <TextBlock HorizontalAlignment="Center"
+                                                       VerticalAlignment="Center"
+                                                       FontSize="14"
+                                                       Foreground="#8196A3"
+                                                       Text="No managed installs yet.">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Visibility" Value="Visible" />
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding HasInstalledGames}" Value="True">
+                                                                <Setter Property="Visibility" Value="Collapsed" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+
+                                            <ListBox ItemsSource="{Binding InstalledGames}"
+                                                     Style="{StaticResource VirtualizedListStyle}"
+                                                     ItemContainerStyle="{StaticResource VirtualizedListItemStyle}">
+                                                <ListBox.ItemTemplate>
+                                                    <DataTemplate DataType="{x:Type viewModels:InstallRecordItemViewModel}">
+                                                        <Border Margin="0,0,0,12"
+                                                                Padding="14"
+                                                                Background="#0E1419"
+                                                                BorderBrush="#26323A"
+                                                                BorderThickness="1"
+                                                                CornerRadius="14">
+                                                            <Grid>
+                                                                <Grid.ColumnDefinitions>
+                                                                    <ColumnDefinition Width="*" />
+                                                                    <ColumnDefinition Width="Auto" />
+                                                                </Grid.ColumnDefinitions>
+
+                                                                <StackPanel>
+                                                                    <TextBlock FontSize="15"
+                                                                               FontWeight="SemiBold"
+                                                                               Foreground="#F7F5EA"
+                                                                               Text="{Binding DisplayName}" />
+                                                                    <TextBlock Margin="0,6,0,0"
+                                                                               FontSize="12"
+                                                                               Foreground="#9CB0BD"
+                                                                               Text="{Binding Details}" />
+                                                                    <TextBlock Margin="0,8,0,0"
+                                                                               FontFamily="Cascadia Code"
+                                                                               FontSize="11"
+                                                                               Foreground="#8196A3"
+                                                                               Text="{Binding InstallPath}"
+                                                                               TextWrapping="Wrap" />
+                                                                </StackPanel>
+
+                                                                <Button Grid.Column="1"
+                                                                        Padding="12,6"
+                                                                        Margin="12,0,0,0"
+                                                                        VerticalAlignment="Center"
+                                                                        Background="#3A2121"
+                                                                        BorderBrush="#6E3838"
+                                                                        BorderThickness="1"
+                                                                        Command="{Binding DataContext.UndoCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                        CommandParameter="{Binding}"
+                                                                        Content="Undo"
+                                                                        Cursor="Hand"
+                                                                        Foreground="#F7F5EA" />
+                                                            </Grid>
                                                         </Border>
-                                                        <Border Margin="8,0,0,0"
-                                                                Padding="8,2"
-                                                                Background="#24303A"
-                                                                CornerRadius="10">
-                                                            <TextBlock FontSize="12"
-                                                                       Foreground="#A8C0D0"
-                                                                       Text="{Binding SourceLabel}" />
-                                                        </Border>
-                                                    </DockPanel>
-
-                                                    <TextBlock Margin="0,10,0,0"
-                                                               FontFamily="Cascadia Code"
-                                                               FontSize="12"
-                                                               Foreground="#90A3AF"
-                                                               Text="{Binding InstallPath}"
-                                                               TextWrapping="Wrap" />
-                                                </StackPanel>
-                                            </Grid>
-                                        </Border>
-                                    </DataTemplate>
-                                </ListBox.ItemTemplate>
-                            </ListBox>
+                                                    </DataTemplate>
+                                                </ListBox.ItemTemplate>
+                                            </ListBox>
+                                        </Grid>
+                                    </Grid>
+                                </Border>
+                            </Grid>
                         </Grid>
                     </Grid>
-                </Border>
+                </TabItem>
+                <TabItem Header="Backups &amp; Restore">
+                    <Border Margin="0,16,0,0"
+                            Padding="18"
+                            Background="#161E24"
+                            BorderBrush="#2E3942"
+                            BorderThickness="1"
+                            CornerRadius="18">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
 
-                <Border Grid.Row="1"
-                        Margin="0,18,0,0"
-                        Padding="18"
-                        Background="#161E24"
-                        BorderBrush="#2E3942"
-                        BorderThickness="1"
-                        CornerRadius="18">
-                    <Grid>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="*" />
-                        </Grid.RowDefinitions>
+                            <StackPanel Margin="0,0,0,14">
+                                <TextBlock FontSize="20"
+                                           FontWeight="SemiBold"
+                                           Foreground="#F7F5EA"
+                                           Text="Backup Snapshots" />
+                                <TextBlock Margin="0,6,0,0"
+                                           FontSize="13"
+                                           Foreground="#9CB0BD"
+                                           Text="Restore a managed snapshot, open its backup folder, or clean up old snapshot records." />
+                            </StackPanel>
 
-                        <StackPanel Margin="0,0,0,14">
-                            <TextBlock FontSize="20"
-                                       FontWeight="SemiBold"
-                                       Foreground="#F7F5EA"
-                                       Text="Installed Records" />
-                            <TextBlock Margin="0,6,0,0"
-                                       FontSize="13"
-                                       Foreground="#9CB0BD"
-                                       Text="Managed installs can be undone without touching files the app didn’t create." />
-                        </StackPanel>
+                            <Grid Grid.Row="1">
+                                <TextBlock HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"
+                                           FontSize="15"
+                                           Foreground="#8196A3"
+                                           Text="No backup snapshots are available yet.">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding HasSnapshots}" Value="True">
+                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
 
-                        <ListBox Grid.Row="1"
-                                 ItemsSource="{Binding InstalledGames}"
-                                 Style="{StaticResource VirtualizedListStyle}"
-                                 ItemContainerStyle="{StaticResource VirtualizedListItemStyle}">
-                            <ListBox.ItemTemplate>
-                                <DataTemplate DataType="{x:Type viewModels:InstallRecordItemViewModel}">
-                                    <Border Margin="0,0,0,12"
-                                            Padding="14"
-                                            Background="#0E1419"
-                                            BorderBrush="#26323A"
-                                            BorderThickness="1"
-                                            CornerRadius="14">
-                                        <Grid>
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="*" />
-                                                <ColumnDefinition Width="Auto" />
-                                            </Grid.ColumnDefinitions>
-
-                                            <StackPanel>
-                                                <TextBlock FontSize="15"
-                                                           FontWeight="SemiBold"
-                                                           Foreground="#F7F5EA"
-                                                           Text="{Binding DisplayName}" />
-                                                <TextBlock Margin="0,6,0,0"
-                                                           FontSize="12"
-                                                           Foreground="#9CB0BD"
-                                                           Text="{Binding Details}" />
-                                                <TextBlock Margin="0,8,0,0"
-                                                           FontFamily="Cascadia Code"
-                                                           FontSize="11"
-                                                           Foreground="#8196A3"
-                                                           Text="{Binding InstallPath}"
-                                                           TextWrapping="Wrap" />
-                                            </StackPanel>
-
-                                            <Button Grid.Column="1"
-                                                    Padding="12,6"
-                                                    Margin="12,0,0,0"
-                                                    VerticalAlignment="Center"
-                                                    Background="#3A2121"
-                                                    BorderBrush="#6E3838"
+                                <ListBox ItemsSource="{Binding Snapshots}"
+                                         Style="{StaticResource VirtualizedListStyle}"
+                                         ItemContainerStyle="{StaticResource VirtualizedListItemStyle}">
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate DataType="{x:Type viewModels:BackupSnapshotItemViewModel}">
+                                            <Border Margin="0,0,0,12"
+                                                    Padding="14"
+                                                    Background="#0E1419"
+                                                    BorderBrush="#26323A"
                                                     BorderThickness="1"
-                                                    Command="{Binding DataContext.UndoCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                    CommandParameter="{Binding}"
-                                                    Content="Undo"
-                                                    Cursor="Hand"
-                                                    Foreground="#F7F5EA" />
-                                        </Grid>
-                                    </Border>
-                                </DataTemplate>
-                            </ListBox.ItemTemplate>
-                        </ListBox>
-                    </Grid>
-                </Border>
-            </Grid>
+                                                    CornerRadius="14">
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+
+                                                    <StackPanel>
+                                                        <WrapPanel>
+                                                            <TextBlock FontSize="16"
+                                                                       FontWeight="SemiBold"
+                                                                       Foreground="#F7F5EA"
+                                                                       Text="{Binding DisplayName}" />
+                                                            <Border Margin="10,0,0,0"
+                                                                    Padding="8,2"
+                                                                    Background="#1F2830"
+                                                                    CornerRadius="10">
+                                                                <TextBlock FontSize="12"
+                                                                           Foreground="{Binding StatusBrush}"
+                                                                           Text="{Binding StatusText}" />
+                                                            </Border>
+                                                        </WrapPanel>
+
+                                                        <TextBlock Margin="0,8,0,0"
+                                                                   FontSize="12"
+                                                                   Foreground="#9CB0BD"
+                                                                   Text="{Binding Summary}" />
+                                                        <TextBlock Margin="0,6,0,0"
+                                                                   FontFamily="Cascadia Code"
+                                                                   FontSize="11"
+                                                                   Foreground="#8196A3"
+                                                                   Text="{Binding InstallPath}"
+                                                                   TextWrapping="Wrap" />
+                                                        <TextBlock Margin="0,6,0,0"
+                                                                   FontFamily="Cascadia Code"
+                                                                   FontSize="11"
+                                                                   Foreground="#6E8593"
+                                                                   Text="{Binding TransactionRootPath}"
+                                                                   TextWrapping="Wrap" />
+                                                        <TextBlock Margin="0,8,0,0"
+                                                                   FontSize="12"
+                                                                   Foreground="#FF9C6A"
+                                                                   Text="{Binding ErrorText}"
+                                                                   TextWrapping="Wrap"
+                                                                   Visibility="{Binding HasError, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                                    </StackPanel>
+
+                                                    <StackPanel Grid.Column="1"
+                                                                Margin="14,0,0,0"
+                                                                VerticalAlignment="Center">
+                                                        <Button Style="{StaticResource SlimButtonStyle}"
+                                                                Command="{Binding DataContext.RestoreSnapshotCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                CommandParameter="{Binding}"
+                                                                Content="Restore"
+                                                                IsEnabled="{Binding CanRestore}" />
+                                                        <Button Style="{StaticResource SlimButtonStyle}"
+                                                                Command="{Binding DataContext.OpenSnapshotFolderCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                CommandParameter="{Binding}"
+                                                                Content="Open Folder" />
+                                                        <Button Margin="0"
+                                                                Style="{StaticResource SlimButtonStyle}"
+                                                                Command="{Binding DataContext.DeleteSnapshotCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                CommandParameter="{Binding}"
+                                                                Content="Delete"
+                                                                IsEnabled="{Binding CanDelete}" />
+                                                    </StackPanel>
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+                            </Grid>
+                        </Grid>
+                    </Border>
+                </TabItem>
+            </TabControl>
 
             <Border Grid.Column="1"
                     Padding="18"
@@ -317,7 +1035,16 @@
                         <TextBlock Margin="0,6,0,0"
                                    FontSize="13"
                                    Foreground="#7D8F9B"
-                                   Text="Live installer output, download steps, warnings, and undo activity." />
+                                   Text="Live installer output, restore steps, warnings, and diagnostics." />
+                        <WrapPanel Margin="0,12,0,0">
+                            <Button Style="{StaticResource SlimButtonStyle}"
+                                    Command="{Binding CopyDiagnosticsCommand}"
+                                    Content="Copy Diagnostics" />
+                            <Button Margin="0"
+                                    Style="{StaticResource SlimButtonStyle}"
+                                    Command="{Binding ExportLogsCommand}"
+                                    Content="Export Logs" />
+                        </WrapPanel>
                     </StackPanel>
 
                     <ListBox x:Name="LogList"

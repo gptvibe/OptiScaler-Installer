@@ -1,0 +1,71 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+jobs:
+  package-and-release:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Resolve version
+        shell: pwsh
+        run: |
+          if ($env:GITHUB_REF.StartsWith('refs/tags/v')) {
+            $version = $env:GITHUB_REF_NAME.Substring(1)
+          }
+          else {
+            $project = [xml](Get-Content '.\src\OptiScalerInstaller.App\OptiScalerInstaller.App.csproj')
+            $version = [string]($project.Project.PropertyGroup.Version | Select-Object -First 1)
+          }
+
+          "RELEASE_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Restore
+        run: dotnet restore OptiScalerInstaller.slnx
+
+      - name: Build
+        run: dotnet build OptiScalerInstaller.slnx --configuration Release --no-restore
+
+      - name: Test
+        run: dotnet test OptiScalerInstaller.slnx --configuration Release --no-build
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup -y --no-progress
+
+      - name: Package portable and installer artifacts
+        shell: pwsh
+        run: .\scripts\Build-ReleaseArtifacts.ps1 -Version $env:RELEASE_VERSION
+
+      - name: Upload workflow artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: OptiScalerInstaller-${{ env.RELEASE_VERSION }}-release
+          path: |
+            artifacts/release/portable/*.zip
+            artifacts/release/installer/*.exe
+            artifacts/release/SHA256SUMS.txt
+
+      - name: Publish GitHub release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            artifacts/release/portable/*.zip
+            artifacts/release/installer/*.exe
+            artifacts/release/SHA256SUMS.txt

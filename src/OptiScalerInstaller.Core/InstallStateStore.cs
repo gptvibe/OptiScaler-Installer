@@ -117,6 +117,13 @@ public sealed class InstallStateStore
             .FirstOrDefault();
     }
 
+    public async Task<BackupSnapshotManifest?> FindSnapshotByIdAsync(string snapshotId, CancellationToken cancellationToken = default)
+    {
+        var snapshots = await LoadSnapshotsAsync(cancellationToken);
+        return snapshots.FirstOrDefault(snapshot =>
+            string.Equals(snapshot.SnapshotId, snapshotId, StringComparison.OrdinalIgnoreCase));
+    }
+
     public async Task<BackupSnapshotManifest?> FindLatestRecoverableSnapshotByGameKeyAsync(string gameKey, CancellationToken cancellationToken = default)
     {
         var snapshots = await LoadSnapshotsAsync(cancellationToken);

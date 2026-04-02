@@ -2,7 +2,7 @@ using System.Management;
 
 namespace OptiScalerInstaller.Core;
 
-public sealed class GpuDetector
+public sealed class GpuDetector : IGpuDetectorService
 {
     public GpuVendor DetectGpuVendor()
     {

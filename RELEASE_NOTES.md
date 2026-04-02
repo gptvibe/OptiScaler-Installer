@@ -2,15 +2,15 @@
 
 ## Suggested Tag
 
-- `v0.1.0`
+- `v2.0.0`
 
 ## Suggested Title
 
-- `v0.1.0 - Initial public release`
+- `v2.0.0 - Portable and installer release`
 
 ## Release Body
 
-First public release of OptiScaler Installer for Windows.
+OptiScaler Installer 2.0.0 for Windows.
 
 ### Highlights
 
@@ -21,10 +21,14 @@ First public release of OptiScaler Installer for Windows.
 - Installs OptiScaler with safe proxy DLL selection
 - Stores install records so you can use `Undo` later
 - Shows live progress in a terminal-style log window
+- Includes backup snapshot restore tools, inline diagnostics, and hardened release extraction checks
+- Ships as both a portable zip and an installer exe
 
-### Included Asset
+### Included Assets
 
-- `OptiScalerInstaller-win-x64.exe`
+- `OptiScalerInstaller-portable-win-x64-v2.0.0.zip`
+- `OptiScalerInstaller-setup-win-x64-v2.0.0.exe`
+- `SHA256SUMS.txt`
 
 ### Notes
 
@@ -36,8 +40,6 @@ First public release of OptiScaler Installer for Windows.
 ## Manual Release Steps
 
 1. Commit and push the repo changes.
-2. Create the tag `v0.1.0`.
-3. Open the GitHub repo release page.
-4. Create a new release from that tag.
-5. Upload `artifacts/packages/OptiScalerInstaller-win-x64.exe`.
-6. Paste the release body above.
+2. Create and push the tag `v2.0.0`.
+3. Let GitHub Actions run the `Release` workflow.
+4. Verify the uploaded assets and hashes on the generated GitHub release.

@@ -3,7 +3,7 @@ using System.Text;
 
 namespace OptiScalerInstaller.Core;
 
-public sealed class GameScannerService
+public sealed class GameScannerService : IGameScannerService
 {
     private const int MaxExecutableSearchDepth = 4;
     private const int HeuristicDirectorySearchDepth = 4;

@@ -155,6 +155,7 @@ public sealed class ResilienceTests
         Directory.CreateDirectory(extractedDir);
         await File.WriteAllTextAsync(Path.Combine(extractedDir, ".prepared"), cachedTag);
         await File.WriteAllTextAsync(Path.Combine(extractedDir, "OptiScaler.dll"), "dll-bytes");
+        await File.WriteAllTextAsync(Path.Combine(extractedDir, "OptiScaler.ini"), "ini");
 
         var failingClient = new HttpClient(new AlwaysFailMessageHandler());
         var provider = new GitHubReleaseAssetProvider(appPaths, failingClient);
@@ -196,6 +197,7 @@ public sealed class ResilienceTests
         Directory.CreateDirectory(extractedDir);
         await File.WriteAllTextAsync(Path.Combine(extractedDir, ".prepared"), cachedTag);
         await File.WriteAllTextAsync(Path.Combine(extractedDir, "OptiScaler.dll"), "dll-bytes");
+        await File.WriteAllTextAsync(Path.Combine(extractedDir, "OptiScaler.ini"), "ini");
 
         var handler = new CountingReleaseMetadataMessageHandler(cachedTag);
         var provider = new GitHubReleaseAssetProvider(appPaths, new HttpClient(handler));
@@ -206,6 +208,68 @@ public sealed class ResilienceTests
         Assert.Equal(cachedTag, first.Release.TagName);
         Assert.Equal(cachedTag, second.Release.TagName);
         Assert.Equal(1, handler.LatestReleaseRequestCount);
+    }
+
+    [Fact]
+    public async Task InstallAsync_InvalidPreparedPayload_FailsBeforeWritingGameFiles()
+    {
+        using var temp = new TemporaryDirectory();
+        var appPaths = new AppPaths(Path.Combine(temp.Path, "appdata"));
+        var payloadPath = Path.Combine(temp.Path, "payload-invalid");
+        Directory.CreateDirectory(payloadPath);
+        File.WriteAllText(Path.Combine(payloadPath, "OptiScaler.dll"), "opti-dll");
+
+        var game = CreateTestGame("InvalidPayload", Path.Combine(temp.Path, "InvalidGame"), InstallPolicy.Supported);
+        Directory.CreateDirectory(game.InstallPath);
+
+        var provider = new TestReleaseProvider(payloadPath);
+        var service = new InstallationService(appPaths, provider, new InstallStateStore(appPaths));
+        var outcome = await service.InstallAsync(game, new InstallationRequest { GpuVendor = GpuVendor.Nvidia });
+
+        Assert.False(outcome.Success);
+        Assert.Equal(FailureKind.InstallFailed, outcome.FailureKind);
+        Assert.Contains("failed validation", outcome.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.False(File.Exists(Path.Combine(game.InstallPath, "dxgi.dll")));
+    }
+
+    [Theory]
+    [InlineData("..\\escape.dll")]
+    [InlineData("../escape.dll")]
+    [InlineData("payload\\..\\escape.dll")]
+    [InlineData("C:\\absolute\\escape.dll")]
+    [InlineData("/absolute/escape.dll")]
+    public void GetValidatedExtractionPath_RejectsTraversalAndRootedEntries(string entryKey)
+    {
+        using var temp = new TemporaryDirectory();
+
+        Assert.Throws<InvalidDataException>(() =>
+            GitHubReleaseAssetProvider.GetValidatedExtractionPath(temp.Path, entryKey));
+    }
+
+    [Fact]
+    public void GetValidatedExtractionPath_AllowsNormalRelativeEntries()
+    {
+        using var temp = new TemporaryDirectory();
+
+        var path = GitHubReleaseAssetProvider.GetValidatedExtractionPath(temp.Path, "Licenses/DirectX_LICENSE.txt");
+
+        Assert.StartsWith(Path.GetFullPath(temp.Path), path, StringComparison.OrdinalIgnoreCase);
+        Assert.EndsWith(Path.Combine("Licenses", "DirectX_LICENSE.txt"), path, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void ValidatePreparedPayload_RejectsUnexpectedNestedLayout()
+    {
+        using var temp = new TemporaryDirectory();
+        var extractedPath = Path.Combine(temp.Path, "extracted");
+        Directory.CreateDirectory(Path.Combine(extractedPath, "OptiScaler-v0.7.9"));
+        File.WriteAllText(Path.Combine(extractedPath, "OptiScaler-v0.7.9", "OptiScaler.dll"), "dll");
+        File.WriteAllText(Path.Combine(extractedPath, "OptiScaler-v0.7.9", "OptiScaler.ini"), "ini");
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            GitHubReleaseAssetProvider.ValidatePreparedPayload(extractedPath));
+
+        Assert.Contains("required file", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     // ── Preflight failures ───────────────────────────────────────────────────

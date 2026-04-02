@@ -39,6 +39,7 @@ public sealed class SupportedGameCatalogService
             .Where(entry => !string.IsNullOrWhiteSpace(entry.DisplayName))
             .Select(Normalize)
             .ToList());
+        ValidateEntries(cachedCatalog.Entries);
 
         return cachedCatalog;
     }
@@ -63,4 +64,75 @@ public sealed class SupportedGameCatalogService
             RequiresOptiPatcher = entry.RequiresOptiPatcher,
             NotesUrl = string.IsNullOrWhiteSpace(entry.NotesUrl) ? null : entry.NotesUrl.Trim(),
         };
+
+    internal static void ValidateEntries(IReadOnlyList<SupportedGameEntry> entries)
+    {
+        var errors = new List<string>();
+
+        var duplicateAppIds = entries
+            .Where(entry => entry.SteamAppId.HasValue)
+            .GroupBy(entry => entry.SteamAppId!.Value)
+            .Where(group => group.Count() > 1)
+            .Select(group => group.Key)
+            .ToList();
+        if (duplicateAppIds.Count > 0)
+        {
+            errors.Add($"Duplicate steamAppId values: {string.Join(", ", duplicateAppIds)}.");
+        }
+
+        for (var index = 0; index < entries.Count; index++)
+        {
+            var entry = entries[index];
+            var label = $"Entry {index + 1} ('{entry.DisplayName}')";
+
+            if (string.IsNullOrWhiteSpace(entry.DisplayName))
+            {
+                errors.Add($"{label} is missing displayName.");
+            }
+
+            if (entry.ExeNames.Count == 0)
+            {
+                errors.Add($"{label} must include at least one exeNames value.");
+            }
+
+            if (entry.ExeNames.Any(exeName =>
+                    !exeName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ||
+                    !string.Equals(exeName, Path.GetFileName(exeName), StringComparison.Ordinal)))
+            {
+                errors.Add($"{label} contains an invalid exeNames entry.");
+            }
+
+            if (!string.IsNullOrWhiteSpace(entry.PreferredProxy) && !IsSupportedProxyName(entry.PreferredProxy))
+            {
+                errors.Add($"{label} has an unsupported preferredProxy '{entry.PreferredProxy}'.");
+            }
+
+            if (entry.FallbackProxies.Any(proxyName => !IsSupportedProxyName(proxyName)))
+            {
+                errors.Add($"{label} contains an unsupported fallback proxy.");
+            }
+
+            if (!string.IsNullOrWhiteSpace(entry.PreferredProxy) &&
+                entry.FallbackProxies.Contains(entry.PreferredProxy, StringComparer.OrdinalIgnoreCase))
+            {
+                errors.Add($"{label} repeats preferredProxy inside fallbackProxies.");
+            }
+
+            if (!string.IsNullOrWhiteSpace(entry.NotesUrl) &&
+                (!Uri.TryCreate(entry.NotesUrl, UriKind.Absolute, out var notesUri) ||
+                 (notesUri.Scheme != Uri.UriSchemeHttp && notesUri.Scheme != Uri.UriSchemeHttps)))
+            {
+                errors.Add($"{label} has an invalid notesUrl.");
+            }
+        }
+
+        if (errors.Count > 0)
+        {
+            throw new InvalidOperationException("Supported game catalog validation failed: " + string.Join(" ", errors));
+        }
+    }
+
+    private static bool IsSupportedProxyName(string proxyName)
+        => proxyName.EndsWith(".dll", StringComparison.OrdinalIgnoreCase) &&
+           string.Equals(proxyName, Path.GetFileName(proxyName), StringComparison.Ordinal);
 }

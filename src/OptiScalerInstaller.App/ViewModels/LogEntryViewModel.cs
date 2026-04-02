@@ -7,6 +7,8 @@ public sealed class LogEntryViewModel
 {
     public required string Time { get; init; }
 
+    public required LogSeverity Severity { get; init; }
+
     public required string Message { get; init; }
 
     public required System.Windows.Media.Brush Foreground { get; init; }
@@ -15,6 +17,7 @@ public sealed class LogEntryViewModel
         => new()
         {
             Time = entry.Timestamp.ToString("HH:mm:ss"),
+            Severity = entry.Severity,
             Message = entry.Message,
             Foreground = entry.Severity switch
             {
