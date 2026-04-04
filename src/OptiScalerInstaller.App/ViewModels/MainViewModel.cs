@@ -24,6 +24,7 @@ public sealed partial class MainViewModel : ObservableObject
     private readonly RunLogger? runLogger;
     private readonly AppBuildInfoSnapshot buildInfo = AppBuildInfo.GetCurrent();
     private readonly ListCollectionView gamesView;
+    private readonly object logsGate = new();
 
     private string gpuVendorText = "Detecting GPU...";
     private string statusText = "Ready";
@@ -1019,13 +1020,16 @@ public sealed partial class MainViewModel : ObservableObject
     private void AddLog(LogSeverity severity, string message)
     {
         var entry = InstallerLogEntry.Create(severity, message);
-        while (Logs.Count >= MaxLogEntries)
+        lock (logsGate)
         {
-            Logs.RemoveAt(0);
-        }
+            while (Logs.Count >= MaxLogEntries)
+            {
+                Logs.RemoveAt(0);
+            }
 
-        Logs.Add(LogEntryViewModel.FromCore(entry));
-        runLogger?.Log(entry);
+            Logs.Add(LogEntryViewModel.FromCore(entry));
+            runLogger?.Log(entry);
+        }
     }
 
     private bool CanInstallSelected()
