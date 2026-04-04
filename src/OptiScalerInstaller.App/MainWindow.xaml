@@ -484,10 +484,10 @@
                                                    FontWeight="SemiBold"
                                                    Foreground="#F7F5EA"
                                                    Text="Detected Games" />
-                                        <TextBlock Margin="0,6,0,0"
-                                                   FontSize="13"
-                                                   Foreground="#9CB0BD"
-                                                   Text="Search, filter, and pick the titles you want to install or review." />
+                                         <TextBlock Margin="0,6,0,0"
+                                                    FontSize="13"
+                                                    Foreground="#9CB0BD"
+                                                    Text="Search, filter, and pick Steam, Epic, GOG, Ubisoft, or manual installs to review." />
                                     </StackPanel>
 
                                     <Grid Grid.Row="1">
@@ -498,7 +498,7 @@
                                                    Text="{Binding EmptyGamesMessage}"
                                                    Visibility="{Binding HasNoVisibleGames, Converter={StaticResource BooleanToVisibilityConverter}}" />
 
-                                        <ListBox ItemsSource="{Binding VisibleGames}"
+                                        <ListBox ItemsSource="{Binding GamesView}"
                                                  SelectedItem="{Binding SelectedGame, Mode=TwoWay}"
                                                  Style="{StaticResource VirtualizedListStyle}"
                                                  ItemContainerStyle="{StaticResource VirtualizedListItemStyle}">

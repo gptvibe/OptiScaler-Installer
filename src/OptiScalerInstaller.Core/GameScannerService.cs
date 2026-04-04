@@ -37,16 +37,19 @@ public sealed class GameScannerService : IGameScannerService
 
     private readonly SupportedGameCatalogService catalogService;
     private readonly SteamDiscoveryService steamDiscoveryService;
+    private readonly LauncherDiscoveryService launcherDiscoveryService;
 
     public GameScannerService(
         SupportedGameCatalogService catalogService,
-        SteamDiscoveryService steamDiscoveryService)
+        SteamDiscoveryService steamDiscoveryService,
+        LauncherDiscoveryService launcherDiscoveryService)
     {
         this.catalogService = catalogService;
         this.steamDiscoveryService = steamDiscoveryService;
+        this.launcherDiscoveryService = launcherDiscoveryService;
     }
 
-    public async Task<IReadOnlyList<DetectedGame>> ScanSteamGamesAsync(CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<DetectedGame>> ScanGamesAsync(CancellationToken cancellationToken = default)
     {
         var catalog = await catalogService.LoadAsync(cancellationToken);
         var results = new List<DetectedGame>();
@@ -92,9 +95,35 @@ public sealed class GameScannerService : IGameScannerService
                 isManualOverride: false));
         }
 
+        foreach (var launcherGame in launcherDiscoveryService.DiscoverInstalledGames())
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!Directory.Exists(launcherGame.InstallPath))
+            {
+                continue;
+            }
+
+            var matched = TryResolveLauncherGame(catalog, launcherGame);
+            if (matched.Entry is null || matched.ExecutablePath is null)
+            {
+                continue;
+            }
+
+            results.Add(CreateDetectedGame(
+                matched.Entry.DisplayName,
+                launcherGame.InstallPath,
+                matched.ExecutablePath,
+                launcherGame.Source,
+                matched.Entry,
+                isManualOverride: false));
+        }
+
         return results
-            .GroupBy(game => game.GameKey, StringComparer.OrdinalIgnoreCase)
-            .Select(group => group.First())
+            .GroupBy(game => Path.GetFullPath(game.InstallPath), StringComparer.OrdinalIgnoreCase)
+            .Select(group => group
+                .OrderBy(game => GetSourcePriority(game.Source))
+                .ThenBy(game => game.DisplayName, StringComparer.OrdinalIgnoreCase)
+                .First())
             .OrderBy(game => game.DisplayName, StringComparer.OrdinalIgnoreCase)
             .ToList();
     }
@@ -333,6 +362,28 @@ public sealed class GameScannerService : IGameScannerService
             IsManualOverride = isManualOverride,
         };
 
+    private static (SupportedGameEntry? Entry, string? ExecutablePath) TryResolveLauncherGame(
+        SupportedGameCatalog catalog,
+        LauncherGameInstallation launcherGame)
+    {
+        if (!string.IsNullOrWhiteSpace(launcherGame.LaunchExecutablePath) &&
+            File.Exists(launcherGame.LaunchExecutablePath))
+        {
+            var launchExecutableEntry = catalog.FindByExecutableName(Path.GetFileName(launcherGame.LaunchExecutablePath));
+            if (launchExecutableEntry is not null)
+            {
+                return (launchExecutableEntry, launcherGame.LaunchExecutablePath);
+            }
+        }
+
+        var candidateExePath = EnumerateExecutables(launcherGame.InstallPath)
+            .FirstOrDefault(path => catalog.FindByExecutableName(Path.GetFileName(path)) is not null);
+
+        return candidateExePath is null
+            ? (null, null)
+            : (catalog.FindByExecutableName(Path.GetFileName(candidateExePath)), candidateExePath);
+    }
+
     private static string BuildGameKey(string displayName, string installPath, int? appId = null)
     {
         if (appId.HasValue)
@@ -346,4 +397,14 @@ public sealed class GameScannerService : IGameScannerService
         var hash = Convert.ToHexString(hashBytes.AsSpan(0, 4)).ToLowerInvariant();
         return $"{safeName.ToLowerInvariant()}-{hash}";
     }
+
+    private static int GetSourcePriority(GameSource source)
+        => source switch
+        {
+            GameSource.Steam => 0,
+            GameSource.Epic => 1,
+            GameSource.Gog => 2,
+            GameSource.Ubisoft => 3,
+            _ => 10,
+        };
 }

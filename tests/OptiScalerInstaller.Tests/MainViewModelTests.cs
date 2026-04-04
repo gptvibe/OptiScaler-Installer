@@ -207,7 +207,7 @@ public sealed class MainViewModelTests
 
         public DetectedGame? ManualGame { get; init; }
 
-        public Task<IReadOnlyList<DetectedGame>> ScanSteamGamesAsync(CancellationToken cancellationToken = default)
+        public Task<IReadOnlyList<DetectedGame>> ScanGamesAsync(CancellationToken cancellationToken = default)
             => Task.FromResult(ScannedGames);
 
         public Task<DetectedGame> InspectManualFolderAsync(string installPath, CancellationToken cancellationToken = default)

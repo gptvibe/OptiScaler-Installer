@@ -2,7 +2,7 @@ namespace OptiScalerInstaller.Core;
 
 public interface IGameScannerService
 {
-    Task<IReadOnlyList<DetectedGame>> ScanSteamGamesAsync(CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<DetectedGame>> ScanGamesAsync(CancellationToken cancellationToken = default);
 
     Task<DetectedGame> InspectManualFolderAsync(string installPath, CancellationToken cancellationToken = default);
 }

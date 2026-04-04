@@ -7,7 +7,7 @@ Windows utility for automatically detecting supported games, downloading the lat
 ## What It Does
 
 - Detects your GPU vendor automatically: `Nvidia`, `AMD`, or `Intel`
-- Scans Steam libraries for supported games
+- Scans Steam, Epic, GOG, and Ubisoft libraries for supported games
 - Lets you pick one game or install to all detected supported games
 - Supports manual folder selection for non-Steam games
 - Downloads the latest stable OptiScaler release automatically (with retry and timeout)
@@ -25,8 +25,8 @@ Windows utility for automatically detecting supported games, downloading the lat
 
 From the GitHub release page, download:
 
-- `OptiScalerInstaller-setup-win-x64-v2.0.0.exe`
-- `OptiScalerInstaller-portable-win-x64-v2.0.0.zip`
+- `OptiScalerInstaller-setup-win-x64-v2.1.0.exe`
+- `OptiScalerInstaller-portable-win-x64-v2.1.0.zip`
 
 Use the setup exe for the normal install experience. Use the portable zip if you want an unpack-and-run build with no installer.
 
@@ -35,7 +35,7 @@ Use the setup exe for the normal install experience. Use the portable zip if you
 1. Download either the setup exe or the portable zip from the latest GitHub release.
 2. If you downloaded the setup exe, run it and launch the app from the installed shortcut.
 3. If you downloaded the portable zip, extract it and run `OptiScalerInstaller.exe`.
-4. Wait for the app to scan your Steam libraries automatically.
+4. Wait for the app to scan your Steam, Epic, GOG, and Ubisoft installs automatically.
 5. If supported games are found:
    - leave the checked games selected
    - click `Install Selected` to install only checked games
@@ -95,7 +95,7 @@ When you click `Undo`, it will:
 ## Current Scope
 
 - Windows only
-- Steam auto-detection
+- Steam, Epic, GOG, and Ubisoft auto-detection
 - Manual folder fallback
 - Latest stable OptiScaler release only
 - Bundled starter support catalog in [`data/supported-games.json`](data/supported-games.json)
@@ -105,7 +105,7 @@ When you click `Undo`, it will:
 - Show game cover art after the app detects supported games
 - Expand the bundled supported-game catalog
 - Improve release packaging and signing
-- Add launcher support beyond Steam
+- Expand launcher support and metadata matching even further
 
 ## Build From Source
 
@@ -131,13 +131,13 @@ The publish output lands under:
 Build both release artifacts locally:
 
 ```powershell
-.\scripts\Build-ReleaseArtifacts.ps1 -Version 2.0.0 -SkipInstaller
+.\scripts\Build-ReleaseArtifacts.ps1 -Version 2.1.0 -SkipInstaller
 ```
 
 If Inno Setup is installed and `ISCC.exe` is on `PATH`, omit `-SkipInstaller` and the script will create:
 
-- `artifacts\release\portable\OptiScalerInstaller-portable-win-x64-v2.0.0.zip`
-- `artifacts\release\installer\OptiScalerInstaller-setup-win-x64-v2.0.0.exe`
+- `artifacts\release\portable\OptiScalerInstaller-portable-win-x64-v2.1.0.zip`
+- `artifacts\release\installer\OptiScalerInstaller-setup-win-x64-v2.1.0.exe`
 - `artifacts\release\SHA256SUMS.txt`
 
 ## Test
@@ -150,7 +150,7 @@ dotnet test OptiScalerInstaller.slnx
 
 - GitHub Actions workflow: [`.github/workflows/ci.yml`](.github/workflows/ci.yml)
 - Runs `restore`, `build`, `test`, and self-contained publish validation on `windows-latest`
-- Tagging `v2.0.0` runs [`.github/workflows/release.yml`](.github/workflows/release.yml) to produce the portable zip, setup exe, and `SHA256SUMS.txt`
+- Tagging `v2.1.0` runs [`.github/workflows/release.yml`](.github/workflows/release.yml) to produce the portable zip, setup exe, and `SHA256SUMS.txt`
 
 ## Release Signing And SmartScreen
 
@@ -163,11 +163,11 @@ dotnet test OptiScalerInstaller.slnx
 - PowerShell hash example:
 
 ```powershell
-Get-FileHash .\OptiScalerInstaller-setup-win-x64-v2.0.0.exe -Algorithm SHA256
+Get-FileHash .\OptiScalerInstaller-setup-win-x64-v2.1.0.exe -Algorithm SHA256
 ```
 
 - Practical signing flow with built-in Windows tooling:
 
 ```powershell
-signtool sign /fd SHA256 /td SHA256 /tr <RFC3161-TIMESTAMP-URL> /a .\OptiScalerInstaller-setup-win-x64-v2.0.0.exe
+signtool sign /fd SHA256 /td SHA256 /tr <RFC3161-TIMESTAMP-URL> /a .\OptiScalerInstaller-setup-win-x64-v2.1.0.exe
 ```

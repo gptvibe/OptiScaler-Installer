@@ -36,7 +36,14 @@ public sealed class DetectedGameItemViewModel : ObservableObject
 
     public string ExecutablePath => Model.ExePath ?? "Executable not detected";
 
-    public string SourceLabel => Model.Source == GameSource.Steam ? "Steam" : "Manual";
+    public string SourceLabel => Model.Source switch
+    {
+        GameSource.Steam => "Steam",
+        GameSource.Epic => "Epic",
+        GameSource.Gog => "GOG",
+        GameSource.Ubisoft => "Ubisoft",
+        _ => "Manual",
+    };
 
     public bool IsSteamGame => Model.Source == GameSource.Steam;
 

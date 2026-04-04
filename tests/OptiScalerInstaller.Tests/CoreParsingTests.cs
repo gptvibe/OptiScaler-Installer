@@ -5,6 +5,18 @@ namespace OptiScalerInstaller.Tests;
 
 public sealed class CoreParsingTests
 {
+    private static readonly HashSet<string> AllowedSupportedGameProperties = new(StringComparer.Ordinal)
+    {
+        "steamAppId",
+        "displayName",
+        "exeNames",
+        "preferredProxy",
+        "fallbackProxies",
+        "installPolicy",
+        "requiresOptiPatcher",
+        "notesUrl",
+    };
+
     [Fact]
     public void ClassifyGpuNames_ReturnsExpectedVendor()
     {
@@ -57,6 +69,58 @@ public sealed class CoreParsingTests
         Assert.Equal(1091500, result!.AppId);
         Assert.Equal("Cyberpunk 2077", result.Name);
         Assert.Equal(Path.Combine(@"D:\SteamLibrary", "steamapps", "common", "Cyberpunk 2077"), result.InstallPath);
+    }
+
+    [Fact]
+    public void ParseEpicManifestContent_ReturnsLauncherInstallation()
+    {
+        const string manifest = """
+        {
+          "DisplayName": "Alan Wake 2",
+          "InstallLocation": "D:\\Epic Games\\AlanWake2",
+          "LaunchExecutable": "AlanWake2.exe"
+        }
+        """;
+
+        var result = LauncherDiscoveryService.ParseEpicManifestContent(manifest);
+
+        Assert.NotNull(result);
+        Assert.Equal(GameSource.Epic, result!.Source);
+        Assert.Equal("Alan Wake 2", result.DisplayName);
+        Assert.Equal(@"D:\Epic Games\AlanWake2", result.InstallPath);
+        Assert.Equal(Path.Combine(@"D:\Epic Games\AlanWake2", "AlanWake2.exe"), result.LaunchExecutablePath);
+    }
+
+    [Fact]
+    public void CreateGogInstallation_NormalizesLauncherMetadata()
+    {
+        var result = LauncherDiscoveryService.CreateGogInstallation(
+            "123456",
+            "Cyberpunk 2077",
+            @"C:\Games\Cyberpunk 2077",
+            "bin\\x64\\Cyberpunk2077.exe");
+
+        Assert.NotNull(result);
+        Assert.Equal(GameSource.Gog, result!.Source);
+        Assert.Equal("Cyberpunk 2077", result.DisplayName);
+        Assert.Equal(@"C:\Games\Cyberpunk 2077", result.InstallPath);
+        Assert.Equal(Path.Combine(@"C:\Games\Cyberpunk 2077", "bin", "x64", "Cyberpunk2077.exe"), result.LaunchExecutablePath);
+    }
+
+    [Fact]
+    public void CreateUbisoftInstallation_UsesKeyNameWhenDisplayNameMissing()
+    {
+        var result = LauncherDiscoveryService.CreateUbisoftInstallation(
+            "635",
+            null,
+            @"D:\Ubisoft\TheDivision2",
+            "TheDivision2.exe");
+
+        Assert.NotNull(result);
+        Assert.Equal(GameSource.Ubisoft, result!.Source);
+        Assert.Equal("635", result.DisplayName);
+        Assert.Equal(@"D:\Ubisoft\TheDivision2", result.InstallPath);
+        Assert.Equal(Path.Combine(@"D:\Ubisoft\TheDivision2", "TheDivision2.exe"), result.LaunchExecutablePath);
     }
 
     [Fact]
@@ -213,6 +277,24 @@ public sealed class CoreParsingTests
     }
 
     [Fact]
+    public async Task SupportedGamesJson_UsesExpectedPropertyNames()
+    {
+        var catalogPath = Path.Combine(AppContext.BaseDirectory, "data", "supported-games.json");
+        var content = await File.ReadAllTextAsync(catalogPath);
+        using var document = JsonDocument.Parse(content);
+
+        Assert.Equal(JsonValueKind.Array, document.RootElement.ValueKind);
+        foreach (var entry in document.RootElement.EnumerateArray())
+        {
+            Assert.Equal(JsonValueKind.Object, entry.ValueKind);
+            foreach (var property in entry.EnumerateObject())
+            {
+                Assert.Contains(property.Name, AllowedSupportedGameProperties);
+            }
+        }
+    }
+
+    [Fact]
     public async Task InspectManualFolderAsync_MatchesKnownExecutable()
     {
         using var temp = new TemporaryDirectory();
@@ -236,7 +318,8 @@ public sealed class CoreParsingTests
 
         var scanner = new GameScannerService(
             new SupportedGameCatalogService(catalogPath),
-            new SteamDiscoveryService());
+            new SteamDiscoveryService(),
+            new LauncherDiscoveryService());
 
         var result = await scanner.InspectManualFolderAsync(gameRoot);
 

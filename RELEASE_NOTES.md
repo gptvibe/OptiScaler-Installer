@@ -2,20 +2,20 @@
 
 ## Suggested Tag
 
-- `v2.0.0`
+- `v2.1.0`
 
 ## Suggested Title
 
-- `v2.0.0 - Portable and installer release`
+- `v2.1.0 - Portable and installer release`
 
 ## Release Body
 
-OptiScaler Installer 2.0.0 for Windows.
+OptiScaler Installer 2.1.0 for Windows.
 
 ### Highlights
 
 - Automatically detects your graphics vendor: `Nvidia`, `AMD`, or `Intel`
-- Scans Steam libraries for supported games on launch
+- Scans Steam, Epic, GOG, and Ubisoft installs for supported games on launch
 - Supports manual folder selection for games not found automatically
 - Downloads the latest stable OptiScaler release automatically
 - Installs OptiScaler with safe proxy DLL selection
@@ -26,8 +26,8 @@ OptiScaler Installer 2.0.0 for Windows.
 
 ### Included Assets
 
-- `OptiScalerInstaller-portable-win-x64-v2.0.0.zip`
-- `OptiScalerInstaller-setup-win-x64-v2.0.0.exe`
+- `OptiScalerInstaller-portable-win-x64-v2.1.0.zip`
+- `OptiScalerInstaller-setup-win-x64-v2.1.0.exe`
 - `SHA256SUMS.txt`
 
 ### Notes
@@ -40,6 +40,6 @@ OptiScaler Installer 2.0.0 for Windows.
 ## Manual Release Steps
 
 1. Commit and push the repo changes.
-2. Create and push the tag `v2.0.0`.
+2. Create and push the tag `v2.1.0`.
 3. Let GitHub Actions run the `Release` workflow.
 4. Verify the uploaded assets and hashes on the generated GitHub release.

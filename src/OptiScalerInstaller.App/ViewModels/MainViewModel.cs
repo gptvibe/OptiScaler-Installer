@@ -5,6 +5,7 @@ using System.Text;
 using OptiScalerInstaller.App.Infrastructure;
 using OptiScalerInstaller.App.Services;
 using OptiScalerInstaller.Core;
+using System.Windows.Data;
 
 namespace OptiScalerInstaller.App.ViewModels;
 
@@ -21,6 +22,7 @@ public sealed partial class MainViewModel : ObservableObject
     private readonly IUserInteractionService userInteractionService;
     private readonly RunLogger? runLogger;
     private readonly AppBuildInfoSnapshot buildInfo = AppBuildInfo.GetCurrent();
+    private readonly ListCollectionView gamesView;
 
     private string gpuVendorText = "Detecting GPU...";
     private string statusText = "Ready";
@@ -41,6 +43,9 @@ public sealed partial class MainViewModel : ObservableObject
     private string latestPreparedReleaseTag = "Latest stable (resolved during install)";
     private BackupSnapshotItemViewModel? selectedSnapshot;
     private GameFilterOptionViewModel selectedGameFilter;
+    private int visibleGameCount;
+    private int deferredVisibleGamesRefreshDepth;
+    private bool pendingVisibleGamesRefresh;
 
     public MainViewModel(
         IGameScannerService gameScannerService,
@@ -63,6 +68,8 @@ public sealed partial class MainViewModel : ObservableObject
             new() { Key = FilterNeedsReview, Label = "Needs review" },
         ]);
         selectedGameFilter = GameFilters[0];
+        gamesView = new ListCollectionView(Games);
+        gamesView.Filter = FilterVisibleGame;
 
         RefreshCommand = new AsyncRelayCommand(RefreshAsync, () => !IsBusy);
         BrowseFolderCommand = new AsyncRelayCommand(BrowseFolderAsync, () => !IsBusy);
@@ -89,7 +96,9 @@ public sealed partial class MainViewModel : ObservableObject
 
     public ObservableCollection<DetectedGameItemViewModel> Games { get; } = [];
 
-    public ObservableCollection<DetectedGameItemViewModel> VisibleGames { get; } = [];
+    public ICollectionView GamesView => gamesView;
+
+    public IReadOnlyList<DetectedGameItemViewModel> VisibleGames => GetVisibleGames().ToList();
 
     public ObservableCollection<InstallRecordItemViewModel> InstalledGames { get; } = [];
 
@@ -213,6 +222,11 @@ public sealed partial class MainViewModel : ObservableObject
         get => selectedGameFilter;
         set
         {
+            if (value is null)
+            {
+                return;
+            }
+
             if (SetProperty(ref selectedGameFilter, value))
             {
                 RefreshVisibleGames();
@@ -248,14 +262,20 @@ public sealed partial class MainViewModel : ObservableObject
             ? SelectedGame.ReleaseTagText
             : latestPreparedReleaseTag;
 
-    public bool HasNoVisibleGames => !VisibleGames.Any() && !IsBusy;
+    public bool HasNoVisibleGames => VisibleGameCount == 0 && !IsBusy;
+
+    public int VisibleGameCount
+    {
+        get => visibleGameCount;
+        private set => SetProperty(ref visibleGameCount, value);
+    }
 
     public bool HasInstalledGames => InstalledGames.Any();
 
     public bool HasSnapshots => Snapshots.Any();
 
     public string VisibleGamesSummaryText
-        => $"{VisibleGames.Count} shown · {Games.Count(game => game.IsSelected)} selected · {Games.Count} total";
+        => $"{VisibleGameCount} shown · {Games.Count(game => game.IsSelected)} selected · {Games.Count} total";
 
     public bool HasBanner => !string.IsNullOrWhiteSpace(BannerMessage);
 
@@ -300,14 +320,14 @@ public sealed partial class MainViewModel : ObservableObject
             return;
         }
 
-        BeginOperation("Scanning Steam libraries...", "Searching supported Steam installs...", isIndeterminate: true);
+        BeginOperation("Scanning game libraries...", "Searching Steam, Epic, GOG, and Ubisoft installs...", isIndeterminate: true);
         AddLog(LogSeverity.Info, "Starting auto-detection.");
 
         try
         {
             UpdateGpuVendorText();
 
-            var detectedGames = await gameScannerService.ScanSteamGamesAsync(operationCts!.Token);
+            var detectedGames = await gameScannerService.ScanGamesAsync(operationCts!.Token);
             ReplaceGames(detectedGames);
             await ReloadInstalledGamesAsync();
             await ReloadSnapshotsAsync();
@@ -315,7 +335,7 @@ public sealed partial class MainViewModel : ObservableObject
             RefreshVisibleGames();
 
             StatusText = detectedGames.Count == 0
-                ? "No supported Steam games found."
+                ? "No supported games found."
                 : $"Found {detectedGames.Count} supported game(s).";
             CurrentStepText = "Scan complete.";
             AddLog(detectedGames.Count == 0 ? LogSeverity.Warning : LogSeverity.Success, StatusText);
@@ -420,10 +440,13 @@ public sealed partial class MainViewModel : ObservableObject
     private async Task InstallAllAsync()
     {
         var installableGames = Games.Where(game => game.CanInstall).ToList();
-        foreach (var game in installableGames)
+        RunWithDeferredVisibleGamesRefresh(() =>
         {
-            game.IsSelected = true;
-        }
+            foreach (var game in installableGames)
+            {
+                game.IsSelected = true;
+            }
+        });
 
         await InstallGamesAsync(installableGames);
     }
@@ -829,32 +852,36 @@ public sealed partial class MainViewModel : ObservableObject
 
     private void RefreshVisibleGames()
     {
-        var selectedPath = SelectedGame?.InstallPath;
-        var matchingGames = Games
-            .Where(MatchesSearchAndFilter)
-            .OrderBy(game => game.DisplayName, StringComparer.OrdinalIgnoreCase)
-            .ToList();
-
-        VisibleGames.Clear();
-        foreach (var game in matchingGames)
+        if (deferredVisibleGamesRefreshDepth > 0)
         {
-            VisibleGames.Add(game);
+            pendingVisibleGamesRefresh = true;
+            return;
         }
 
+        gamesView.Refresh();
+        var selectedPath = SelectedGame?.InstallPath;
+        var matchingGames = GetVisibleGames().ToList();
+        VisibleGameCount = matchingGames.Count;
+
         SelectedGame = selectedPath is null
-            ? VisibleGames.FirstOrDefault()
-            : VisibleGames.FirstOrDefault(game =>
+            ? matchingGames.FirstOrDefault()
+            : matchingGames.FirstOrDefault(game =>
                 string.Equals(game.InstallPath, selectedPath, StringComparison.OrdinalIgnoreCase))
-                ?? VisibleGames.FirstOrDefault();
+                ?? matchingGames.FirstOrDefault();
 
         EmptyGamesMessage = Games.Count == 0
             ? "No supported games found yet."
             : "No detected games match the current search or filter.";
 
+        pendingVisibleGamesRefresh = false;
+        OnPropertyChanged(nameof(VisibleGames));
         OnPropertyChanged(nameof(HasNoVisibleGames));
         OnPropertyChanged(nameof(VisibleGamesSummaryText));
         NotifyCommandStates();
     }
+
+    private bool FilterVisibleGame(object item)
+        => item is DetectedGameItemViewModel game && MatchesSearchAndFilter(game);
 
     private bool MatchesSearchAndFilter(DetectedGameItemViewModel game)
     {
@@ -889,22 +916,24 @@ public sealed partial class MainViewModel : ObservableObject
 
     private void SelectAllVisibleGames()
     {
-        foreach (var game in VisibleGames.Where(game => game.CanSelect).ToList())
+        RunWithDeferredVisibleGamesRefresh(() =>
         {
-            game.IsSelected = true;
-        }
-
-        RefreshVisibleGames();
+            foreach (var game in GetVisibleGames().Where(game => game.CanSelect && !game.IsSelected).ToList())
+            {
+                game.IsSelected = true;
+            }
+        });
     }
 
     private void SelectNoneVisibleGames()
     {
-        foreach (var game in VisibleGames.Where(game => game.IsSelected).ToList())
+        RunWithDeferredVisibleGamesRefresh(() =>
         {
-            game.IsSelected = false;
-        }
-
-        RefreshVisibleGames();
+            foreach (var game in GetVisibleGames().Where(game => game.IsSelected).ToList())
+            {
+                game.IsSelected = false;
+            }
+        });
     }
 
     private void OpenSelectedGameFolder()
@@ -943,6 +972,21 @@ public sealed partial class MainViewModel : ObservableObject
         ProgressValue = 0;
         ProgressText = string.Empty;
         NotifyCommandStates();
+    }
+
+    public void ReportUnhandledException(Exception exception)
+    {
+        ArgumentNullException.ThrowIfNull(exception);
+
+        if (IsBusy)
+        {
+            EndOperation();
+        }
+
+        StatusText = "Unexpected error.";
+        CurrentStepText = "The app recovered from an unexpected UI error.";
+        AddLog(LogSeverity.Error, exception.ToString());
+        ShowBanner("Unexpected error", exception.Message, LogSeverity.Error);
     }
 
     private void UpdateProgress(int completed, int total)
@@ -1004,6 +1048,7 @@ public sealed partial class MainViewModel : ObservableObject
         DeleteSnapshotCommand.NotifyCanExecuteChanged();
         DismissBannerCommand.NotifyCanExecuteChanged();
         OnPropertyChanged(nameof(HasNoVisibleGames));
+        OnPropertyChanged(nameof(VisibleGames));
         OnPropertyChanged(nameof(VisibleGamesSummaryText));
     }
 
@@ -1013,7 +1058,26 @@ public sealed partial class MainViewModel : ObservableObject
         {
             OnPropertyChanged(nameof(VisibleGamesSummaryText));
             RefreshVisibleGames();
-            NotifyCommandStates();
+        }
+    }
+
+    private IEnumerable<DetectedGameItemViewModel> GetVisibleGames()
+        => gamesView.Cast<DetectedGameItemViewModel>();
+
+    private void RunWithDeferredVisibleGamesRefresh(Action action)
+    {
+        deferredVisibleGamesRefreshDepth++;
+        try
+        {
+            action();
+        }
+        finally
+        {
+            deferredVisibleGamesRefreshDepth--;
+            if (deferredVisibleGamesRefreshDepth == 0 && pendingVisibleGamesRefresh)
+            {
+                RefreshVisibleGames();
+            }
         }
     }
 
@@ -1072,7 +1136,7 @@ public sealed partial class MainViewModel : ObservableObject
         builder.AppendLine($"CurrentStep: {CurrentStepText}");
         builder.AppendLine($"Filter: {SelectedGameFilter.Label}");
         builder.AppendLine($"DetectedGames: {Games.Count}");
-        builder.AppendLine($"VisibleGames: {VisibleGames.Count}");
+        builder.AppendLine($"VisibleGames: {VisibleGameCount}");
         builder.AppendLine($"SelectedGames: {Games.Count(game => game.IsSelected)}");
         builder.AppendLine($"ManagedInstalls: {InstalledGames.Count}");
         builder.AppendLine($"Snapshots: {Snapshots.Count}");

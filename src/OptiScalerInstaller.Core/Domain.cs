@@ -28,6 +28,9 @@ public enum SupportStatus
 public enum GameSource
 {
     Steam,
+    Epic,
+    Gog,
+    Ubisoft,
     Manual,
 }
 
@@ -122,6 +125,17 @@ public sealed class SteamGameInstallation
     public required string Name { get; init; }
 
     public required string InstallPath { get; init; }
+}
+
+public sealed class LauncherGameInstallation
+{
+    public required GameSource Source { get; init; }
+
+    public required string DisplayName { get; init; }
+
+    public required string InstallPath { get; init; }
+
+    public string? LaunchExecutablePath { get; init; }
 }
 
 public sealed class DetectedGame

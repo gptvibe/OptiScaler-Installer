@@ -272,6 +272,23 @@ public sealed class ResilienceTests
         Assert.Contains("required file", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public void ValidatePreparedPayload_AcceptsExpectedRootLayout()
+    {
+        using var temp = new TemporaryDirectory();
+        var extractedPath = Path.Combine(temp.Path, "extracted");
+        Directory.CreateDirectory(Path.Combine(extractedPath, "Licenses"));
+        Directory.CreateDirectory(Path.Combine(extractedPath, "D3D12_Optiscaler"));
+        File.WriteAllText(Path.Combine(extractedPath, "OptiScaler.dll"), "dll");
+        File.WriteAllText(Path.Combine(extractedPath, "OptiScaler.ini"), "ini");
+        File.WriteAllText(Path.Combine(extractedPath, "setup.bat"), "echo setup");
+        File.WriteAllText(Path.Combine(extractedPath, "dxgi-enable.bat"), "echo enable");
+        File.WriteAllText(Path.Combine(extractedPath, "Licenses", "DirectX_LICENSE.txt"), "license");
+        File.WriteAllText(Path.Combine(extractedPath, "D3D12_Optiscaler", "D3D12Core.dll"), "d3d12");
+
+        GitHubReleaseAssetProvider.ValidatePreparedPayload(extractedPath);
+    }
+
     // ── Preflight failures ───────────────────────────────────────────────────
 
     [Fact]

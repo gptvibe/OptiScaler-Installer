@@ -22,7 +22,8 @@ public partial class App : System.Windows.Application
         var catalogPath = System.IO.Path.Combine(AppContext.BaseDirectory, "data", "supported-games.json");
         var catalogService = new SupportedGameCatalogService(catalogPath);
         var steamDiscoveryService = new SteamDiscoveryService();
-        var gameScannerService = new GameScannerService(catalogService, steamDiscoveryService);
+        var launcherDiscoveryService = new LauncherDiscoveryService();
+        var gameScannerService = new GameScannerService(catalogService, steamDiscoveryService, launcherDiscoveryService);
         var gpuDetector = new GpuDetector();
         var installStateStore = new InstallStateStore(appPaths);
         var releaseAssetProvider = new GitHubReleaseAssetProvider(appPaths);
@@ -61,11 +62,10 @@ public partial class App : System.Windows.Application
     private void OnDispatcherUnhandledException(object sender, System.Windows.Threading.DispatcherUnhandledExceptionEventArgs e)
     {
         TryLogFatal(e.Exception.ToString());
-        System.Windows.MessageBox.Show(
-            $"An unexpected error occurred:\n\n{e.Exception.Message}",
-            "Unhandled Error",
-            MessageBoxButton.OK,
-            MessageBoxImage.Error);
+        if (MainWindow?.DataContext is MainViewModel viewModel)
+        {
+            viewModel.ReportUnhandledException(e.Exception);
+        }
         e.Handled = true;
     }
 
