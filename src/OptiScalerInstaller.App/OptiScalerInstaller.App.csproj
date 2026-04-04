@@ -14,11 +14,11 @@
     <ApplicationIcon>app.ico</ApplicationIcon>
     <AssemblyName>OptiScalerInstaller</AssemblyName>
     <Product>OptiScaler Installer</Product>
-    <Version>2.1.0</Version>
-    <AssemblyVersion>2.1.0.0</AssemblyVersion>
-    <FileVersion>2.1.0.0</FileVersion>
+    <Version>2.2.0</Version>
+    <AssemblyVersion>2.2.0.0</AssemblyVersion>
+    <FileVersion>2.2.0.0</FileVersion>
     <InformationalVersion>$(Version)</InformationalVersion>
-    <RepositoryUrl>https://github.com/fungk/OptiScaler-Installer</RepositoryUrl>
+    <RepositoryUrl>https://github.com/gptvibe/OptiScaler-Installer</RepositoryUrl>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(SourceRevisionId)' != ''">

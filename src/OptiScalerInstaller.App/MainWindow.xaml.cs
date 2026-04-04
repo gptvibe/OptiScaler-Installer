@@ -1,5 +1,6 @@
 using System.Collections.Specialized;
 using System.Windows;
+using System.Windows.Threading;
 using OptiScalerInstaller.App.ViewModels;
 
 namespace OptiScalerInstaller.App;
@@ -7,6 +8,7 @@ namespace OptiScalerInstaller.App;
 public partial class MainWindow : Window
 {
     private readonly MainViewModel viewModel;
+    private bool pendingLogScroll;
 
     public MainWindow(MainViewModel viewModel)
     {
@@ -15,6 +17,7 @@ public partial class MainWindow : Window
         DataContext = viewModel;
 
         Loaded += OnLoaded;
+        Closed += OnClosed;
         viewModel.Logs.CollectionChanged += OnLogsCollectionChanged;
     }
 
@@ -24,12 +27,29 @@ public partial class MainWindow : Window
         await viewModel.InitializeAsync();
     }
 
+    private void OnClosed(object? sender, EventArgs e)
+    {
+        Closed -= OnClosed;
+        viewModel.Logs.CollectionChanged -= OnLogsCollectionChanged;
+    }
+
     private void OnLogsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
-        if (e.Action is NotifyCollectionChangedAction.Add or NotifyCollectionChangedAction.Reset &&
-            LogList.Items.Count > 0)
+        if (e.Action is not (NotifyCollectionChangedAction.Add or NotifyCollectionChangedAction.Reset) ||
+            LogList.Items.Count == 0 ||
+            pendingLogScroll)
         {
-            LogList.ScrollIntoView(LogList.Items[LogList.Items.Count - 1]);
+            return;
         }
+
+        pendingLogScroll = true;
+        Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() =>
+        {
+            pendingLogScroll = false;
+            if (LogList.Items.Count > 0)
+            {
+                LogList.ScrollIntoView(LogList.Items[LogList.Items.Count - 1]);
+            }
+        }));
     }
 }

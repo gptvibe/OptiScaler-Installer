@@ -11,6 +11,7 @@ namespace OptiScalerInstaller.App.ViewModels;
 
 public sealed partial class MainViewModel : ObservableObject
 {
+    private const int MaxLogEntries = 400;
     private const string FilterAll = "all";
     private const string FilterInstallable = "installable";
     private const string FilterSelected = "selected";
@@ -1018,12 +1019,13 @@ public sealed partial class MainViewModel : ObservableObject
     private void AddLog(LogSeverity severity, string message)
     {
         var entry = InstallerLogEntry.Create(severity, message);
-        Logs.Add(LogEntryViewModel.FromCore(entry));
-        runLogger?.Log(entry);
-        while (Logs.Count > 400)
+        while (Logs.Count >= MaxLogEntries)
         {
             Logs.RemoveAt(0);
         }
+
+        Logs.Add(LogEntryViewModel.FromCore(entry));
+        runLogger?.Log(entry);
     }
 
     private bool CanInstallSelected()

@@ -121,6 +121,38 @@ public sealed class MainViewModelTests
         Assert.Contains("AppBuild:", userInteraction.CopiedText);
     }
 
+    [Fact]
+    public async Task InstallAllCommand_KeepsLogsCappedDuringVerboseBulkInstall()
+    {
+        var scanner = new FakeGameScannerService
+        {
+            ScannedGames =
+            [
+                CreateGame("Alpha Game", @"C:\Games\Alpha", SupportStatus.Supported),
+                CreateGame("Beta Game", @"C:\Games\Beta", SupportStatus.Supported),
+                CreateGame("Gamma Game", @"C:\Games\Gamma", SupportStatus.Supported),
+                CreateGame("Delta Game", @"C:\Games\Delta", SupportStatus.Supported),
+                CreateGame("Epsilon Game", @"C:\Games\Epsilon", SupportStatus.Supported),
+            ],
+        };
+        var workflow = new FakeInstallationWorkflowService
+        {
+            PrepareLogCount = 160,
+            InstallLogCount = 70,
+        };
+
+        var viewModel = CreateViewModel(scanner, workflow);
+        await viewModel.InitializeAsync();
+
+        viewModel.InstallAllCommand.Execute(null);
+        await WaitForConditionAsync(() => !viewModel.IsBusy, TimeSpan.FromSeconds(5));
+
+        Assert.Equal(400, viewModel.Logs.Count);
+        Assert.Equal("Install run complete.", viewModel.StatusText);
+        Assert.Equal(5, workflow.SuccessfulInstallCount);
+        Assert.Contains(viewModel.Logs, log => log.Message.Contains("Installed", StringComparison.Ordinal));
+    }
+
     private static MainViewModel CreateViewModel(
         FakeGameScannerService scanner,
         FakeInstallationWorkflowService workflow)
@@ -201,6 +233,20 @@ public sealed class MainViewModelTests
             Status = status,
         };
 
+    private static async Task WaitForConditionAsync(Func<bool> condition, TimeSpan timeout)
+    {
+        var startedAt = DateTimeOffset.UtcNow;
+        while (!condition())
+        {
+            if (DateTimeOffset.UtcNow - startedAt > timeout)
+            {
+                throw new TimeoutException("Timed out waiting for the operation to finish.");
+            }
+
+            await Task.Delay(25);
+        }
+    }
+
     private sealed class FakeGameScannerService : IGameScannerService
     {
         public IReadOnlyList<DetectedGame> ScannedGames { get; init; } = [];
@@ -225,6 +271,12 @@ public sealed class MainViewModelTests
 
         public IReadOnlyList<BackupSnapshotManifest> Snapshots { get; init; } = [];
 
+        public int PrepareLogCount { get; init; }
+
+        public int InstallLogCount { get; init; }
+
+        public int SuccessfulInstallCount { get; private set; }
+
         public Task<IReadOnlyList<InstallRecord>> LoadInstalledGamesAsync(CancellationToken cancellationToken = default)
             => Task.FromResult(InstalledRecords);
 
@@ -235,7 +287,9 @@ public sealed class MainViewModelTests
             => Task.FromResult(Snapshots);
 
         public Task<PreparedReleaseAsset> PrepareLatestStableReleaseAsync(IProgress<InstallerLogEntry>? progress = null, CancellationToken cancellationToken = default)
-            => Task.FromResult(new PreparedReleaseAsset
+        {
+            EmitProgress(progress, "Preparing cached release", PrepareLogCount);
+            return Task.FromResult(new PreparedReleaseAsset
             {
                 Release = new ReleaseAsset
                 {
@@ -246,6 +300,7 @@ public sealed class MainViewModelTests
                 },
                 ExtractedPath = @"C:\Temp\OptiScaler",
             });
+        }
 
         public Task<InstallOutcome> InstallAsync(
             DetectedGame game,
@@ -253,7 +308,19 @@ public sealed class MainViewModelTests
             PreparedReleaseAsset? preparedRelease = null,
             IProgress<InstallerLogEntry>? progress = null,
             CancellationToken cancellationToken = default)
-            => Task.FromResult(InstallOutcome.Succeeded("Installed"));
+        {
+            EmitProgress(progress, $"Installing {game.DisplayName}", InstallLogCount);
+            SuccessfulInstallCount++;
+
+            return Task.FromResult(InstallOutcome.Succeeded(
+                $"Installed {game.DisplayName}",
+                CreateInstallRecord(
+                    game.GameKey,
+                    game.DisplayName,
+                    game.InstallPath,
+                    preparedRelease?.Release.TagName ?? "v-test",
+                    game.ManifestEntry?.PreferredProxy ?? "dxgi.dll")));
+        }
 
         public Task<InstallOutcome> UndoAsync(
             InstallRecord record,
@@ -275,6 +342,14 @@ public sealed class MainViewModelTests
 
         public Task<bool> DeleteSnapshotAsync(string snapshotId, CancellationToken cancellationToken = default)
             => Task.FromResult(true);
+
+        private static void EmitProgress(IProgress<InstallerLogEntry>? progress, string prefix, int count)
+        {
+            for (var index = 0; index < count; index++)
+            {
+                progress?.Report(InstallerLogEntry.Create(LogSeverity.Info, $"{prefix} step {index + 1}"));
+            }
+        }
     }
 
     private sealed class FakeUserInteractionService : IUserInteractionService

@@ -25,8 +25,8 @@ Windows utility for automatically detecting supported games, downloading the lat
 
 From the GitHub release page, download:
 
-- `OptiScalerInstaller-setup-win-x64-v2.1.0.exe`
-- `OptiScalerInstaller-portable-win-x64-v2.1.0.zip`
+- `OptiScalerInstaller-setup-win-x64-v2.2.0.exe`
+- `OptiScalerInstaller-portable-win-x64-v2.2.0.zip`
 
 Use the setup exe for the normal install experience. Use the portable zip if you want an unpack-and-run build with no installer.
 
@@ -50,6 +50,7 @@ Use the setup exe for the normal install experience. Use the portable zip if you
 - The app downloads the latest stable OptiScaler release automatically when you install.
 - If GitHub is unreachable, the installer transparently falls back to the most recently downloaded local cache (`%LocalAppData%\OptiScalerInstaller\cache\`).
 - Multi-game install runs now prepare the GitHub release once, reuse it across selected games, and use bounded executable scanning plus virtualized UI lists to keep large libraries responsive.
+- `Install All` now keeps the live log stable during heavy bulk installs so the app does not trip a WPF collection-state crash.
 - Before installing, the app verifies the game folder is writable, no target files are locked (game is not running), and there is at least 200 MB of free disk space.
 - CPU does not matter for detection or install behavior here. Only the detected graphics vendor is used.
 - If your system has both an Intel iGPU and an Nvidia GPU, the app will prefer showing `Nvidia`.
@@ -131,13 +132,13 @@ The publish output lands under:
 Build both release artifacts locally:
 
 ```powershell
-.\scripts\Build-ReleaseArtifacts.ps1 -Version 2.1.0 -SkipInstaller
+.\scripts\Build-ReleaseArtifacts.ps1 -Version 2.2.0 -SkipInstaller
 ```
 
 If Inno Setup is installed and `ISCC.exe` is on `PATH`, omit `-SkipInstaller` and the script will create:
 
-- `artifacts\release\portable\OptiScalerInstaller-portable-win-x64-v2.1.0.zip`
-- `artifacts\release\installer\OptiScalerInstaller-setup-win-x64-v2.1.0.exe`
+- `artifacts\release\portable\OptiScalerInstaller-portable-win-x64-v2.2.0.zip`
+- `artifacts\release\installer\OptiScalerInstaller-setup-win-x64-v2.2.0.exe`
 - `artifacts\release\SHA256SUMS.txt`
 
 ## Test
@@ -150,7 +151,7 @@ dotnet test OptiScalerInstaller.slnx
 
 - GitHub Actions workflow: [`.github/workflows/ci.yml`](.github/workflows/ci.yml)
 - Runs `restore`, `build`, `test`, and self-contained publish validation on `windows-latest`
-- Tagging `v2.1.0` runs [`.github/workflows/release.yml`](.github/workflows/release.yml) to produce the portable zip, setup exe, and `SHA256SUMS.txt`
+- Tagging `v2.2.0` runs [`.github/workflows/release.yml`](.github/workflows/release.yml) to produce the portable zip, setup exe, and `SHA256SUMS.txt`
 
 ## Release Signing And SmartScreen
 
@@ -163,11 +164,11 @@ dotnet test OptiScalerInstaller.slnx
 - PowerShell hash example:
 
 ```powershell
-Get-FileHash .\OptiScalerInstaller-setup-win-x64-v2.1.0.exe -Algorithm SHA256
+Get-FileHash .\OptiScalerInstaller-setup-win-x64-v2.2.0.exe -Algorithm SHA256
 ```
 
 - Practical signing flow with built-in Windows tooling:
 
 ```powershell
-signtool sign /fd SHA256 /td SHA256 /tr <RFC3161-TIMESTAMP-URL> /a .\OptiScalerInstaller-setup-win-x64-v2.1.0.exe
+signtool sign /fd SHA256 /td SHA256 /tr <RFC3161-TIMESTAMP-URL> /a .\OptiScalerInstaller-setup-win-x64-v2.2.0.exe
 ```

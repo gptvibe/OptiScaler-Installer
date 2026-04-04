@@ -62,6 +62,7 @@ New-Item -ItemType Directory -Path $installerRoot | Out-Null
 Write-Host "Publishing OptiScaler Installer $Version for $RuntimeIdentifier..."
 dotnet publish $appProjectPath `
     -c $Configuration `
+    -r $RuntimeIdentifier `
     /p:PublishProfile=$publishProfile `
     /p:PublishDir="$publishRoot\" | Out-Host
 
